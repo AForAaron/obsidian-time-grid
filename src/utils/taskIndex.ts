@@ -1,6 +1,8 @@
 import { App, TFile } from 'obsidian';
 import { TaskSection, TaskSettings, TGTask } from '../types/task';
 import { classifyTask, getTodayKey, isPathExcluded, parseTaskLine, sortTasks } from './taskParser';
+import { DEFAULT_ROUTINE_DEFINITION_PATH } from '../types/routine';
+import { getRoutineTaskLineNumbers } from './routineFormat';
 
 export interface TaskIndexSnapshot {
 	tasks: TGTask[];
@@ -11,6 +13,7 @@ export interface TaskIndexSnapshot {
 export class TaskIndex {
 	private app: App;
 	private getSettings: () => TaskSettings;
+	private getRoutineDefinitionPath: () => string;
 	private byFile = new Map<string, TGTask[]>();
 	private listeners = new Set<() => void>();
 	private debounceTimers = new Map<string, number>();
@@ -19,9 +22,14 @@ export class TaskIndex {
 	private revision = 0;
 	private today = getTodayKey();
 
-	constructor(app: App, getSettings: () => TaskSettings) {
+	constructor(
+		app: App,
+		getSettings: () => TaskSettings,
+		getRoutineDefinitionPath: () => string = () => DEFAULT_ROUTINE_DEFINITION_PATH
+	) {
 		this.app = app;
 		this.getSettings = getSettings;
+		this.getRoutineDefinitionPath = getRoutineDefinitionPath;
 	}
 
 	getSnapshot(): TaskIndexSnapshot {
@@ -127,12 +135,14 @@ export class TaskIndex {
 	}
 
 	private async scanFile(file: TFile, settings: TaskSettings): Promise<TGTask[]> {
+		if (file.path === this.getRoutineDefinitionPath()) return [];
 		const cache = this.app.metadataCache.getFileCache(file);
 		const items = cache?.listItems?.filter((item) => item.task !== undefined) ?? [];
 		if (items.length === 0) return [];
 		const content = await this.app.vault.cachedRead(file);
+		const routineLines = getRoutineTaskLineNumbers(content);
 		const lines = content.split('\n');
-		return items.map((item) => {
+		return items.filter((item) => !routineLines.has(item.position.start.line)).map((item) => {
 			const line = item.position.start.line;
 			const raw = (lines[line] ?? '').replace(/\r$/, '');
 			return parseTaskLine(raw, file.path, line, this.today, settings.goalTag);

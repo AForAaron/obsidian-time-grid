@@ -4,12 +4,21 @@ import { TaskSettings } from './types/task';
 import { TaskIndex } from './utils/taskIndex';
 import { TaskWriter } from './utils/taskWriter';
 import { normalizeTimeGridData, TimeGridPluginData, WritingStatsTracker } from './utils/writingStats';
+import { RoutineIndex } from './utils/routineIndex';
+import { RoutineRepository } from './utils/routineRepository';
+import { RoutineWriter } from './utils/routineWriter';
+import { RoutineReminderScheduler } from './utils/routineReminder';
+import { DEFAULT_ROUTINE_DEFINITION_PATH, RoutineSettings } from './types/routine';
 
 export default class TimeGridPlugin extends Plugin {
 	private dataStore: TimeGridPluginData;
 	private writingStats: WritingStatsTracker;
 	private taskIndex: TaskIndex;
 	private taskWriter: TaskWriter;
+	private routineRepository: RoutineRepository;
+	private routineIndex: RoutineIndex;
+	private routineWriter: RoutineWriter;
+	private routineReminder: RoutineReminderScheduler;
 	private metadataResolvedHandled = false;
 
 	async onload() {
@@ -19,8 +28,22 @@ export default class TimeGridPlugin extends Plugin {
 		});
 		this.writingStats.registerEvents();
 		void this.writingStats.initializeBaselines();
-		this.taskIndex = new TaskIndex(this.app, () => this.dataStore.taskSettings);
+		this.taskIndex = new TaskIndex(this.app, () => this.dataStore.taskSettings, () => this.dataStore.routineSettings.definitionPath);
 		this.taskWriter = new TaskWriter(this.app, this.taskIndex, () => this.dataStore.taskSettings, this.writingStats);
+		this.routineRepository = new RoutineRepository(this.app, () => this.dataStore.routineSettings, this.writingStats);
+		this.routineIndex = new RoutineIndex(this.app, this.routineRepository, () => this.dataStore.routineSettings, () => this.dataStore.taskSettings);
+		this.routineWriter = new RoutineWriter(this.routineRepository, this.routineIndex, this.taskWriter, async () => {
+			this.dataStore.routineSettings.migrationVersion = 1;
+			await this.saveData(this.dataStore);
+		});
+		this.routineReminder = new RoutineReminderScheduler(
+			this.routineIndex,
+			() => this.dataStore.routineSettings,
+			async (settings) => {
+				this.dataStore.routineSettings = settings;
+				await this.saveData(this.dataStore);
+			}
+		);
 		this.registerTaskIndexEvents();
 		this.addSettingTab(new TimeGridSettingTab(this.app, this));
 
@@ -32,6 +55,9 @@ export default class TimeGridPlugin extends Plugin {
 				this.writingStats,
 				this.taskIndex,
 				this.taskWriter,
+				this.routineRepository,
+				this.routineIndex,
+				this.routineWriter,
 				() => this.dataStore.taskSettings,
 				() => this.dataStore.taskPanelState,
 				async (state) => {
@@ -49,12 +75,15 @@ export default class TimeGridPlugin extends Plugin {
 		// 在右侧打开面板
 		this.app.workspace.onLayoutReady(() => {
 			void this.taskIndex.rebuild();
+			void this.routineIndex.rebuild();
 			this.activateView();
 		});
 	}
 
 	async onunload() {
 		this.taskIndex?.destroy();
+		this.routineReminder?.destroy();
+		this.routineIndex?.destroy();
 	}
 
 	getTaskSettings(): TaskSettings {
@@ -65,6 +94,18 @@ export default class TimeGridPlugin extends Plugin {
 		this.dataStore.taskSettings = { ...this.dataStore.taskSettings, ...patch };
 		await this.saveData(this.dataStore);
 		this.taskIndex.notifySettingsChanged();
+	}
+
+	getRoutineSettings(): RoutineSettings {
+		return this.dataStore.routineSettings;
+	}
+
+	async updateRoutineSettings(patch: Partial<RoutineSettings>): Promise<void> {
+		if (patch.definitionPath !== undefined) patch.definitionPath = patch.definitionPath.trim() || DEFAULT_ROUTINE_DEFINITION_PATH;
+		this.dataStore.routineSettings = { ...this.dataStore.routineSettings, ...patch };
+		await this.saveData(this.dataStore);
+		void this.taskIndex.rebuild();
+		void this.routineIndex.rebuild();
 	}
 
 	async activateView() {
@@ -85,7 +126,10 @@ export default class TimeGridPlugin extends Plugin {
 
 	private registerTaskIndexEvents(): void {
 		this.registerEvent(this.app.metadataCache.on('changed', (file) => {
-			if (file instanceof TFile && file.extension === 'md') this.taskIndex.scheduleReindex(file);
+			if (file instanceof TFile && file.extension === 'md') {
+				this.taskIndex.scheduleReindex(file);
+				this.routineIndex.scheduleRebuild();
+			}
 		}));
 		this.registerEvent(this.app.metadataCache.on('resolved', () => {
 			if (this.metadataResolvedHandled) return;
@@ -93,9 +137,14 @@ export default class TimeGridPlugin extends Plugin {
 			void this.taskIndex.rebuild();
 		}));
 		this.registerEvent(this.app.vault.on('delete', (file) => this.taskIndex.dropFile(file.path)));
+		this.registerEvent(this.app.vault.on('delete', () => this.routineIndex.scheduleRebuild()));
+		this.registerEvent(this.app.vault.on('create', (file) => {
+			if (file instanceof TFile && file.extension === 'md') this.routineIndex.scheduleRebuild();
+		}));
 		this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
 			this.taskIndex.dropFile(oldPath);
 			if (file instanceof TFile && file.extension === 'md') this.taskIndex.scheduleReindex(file);
+			this.routineIndex.scheduleRebuild();
 		}));
 	}
 }
@@ -112,8 +161,20 @@ class TimeGridSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 		containerEl.createEl('h2', { text: 'Time Grid' });
-		containerEl.createEl('h3', { text: '任务' });
 		const settings = this.plugin.getTaskSettings();
+		const routineSettings = this.plugin.getRoutineSettings();
+
+		containerEl.createEl('h3', { text: '每日流程' });
+		new Setting(containerEl)
+			.setName('启用每日流程')
+			.setDesc('从配置笔记生成今日日记实例；历史实例不会进入普通任务索引。')
+			.addToggle((toggle) => toggle.setValue(routineSettings.enabled).onChange((value) => this.plugin.updateRoutineSettings({ enabled: value })));
+		new Setting(containerEl)
+			.setName('流程配置笔记')
+			.setDesc('Vault 根目录相对路径。修改路径不会自动迁移已有文件。')
+			.addText((text) => text.setValue(routineSettings.definitionPath).onChange((value) => this.plugin.updateRoutineSettings({ definitionPath: value.trim() })));
+
+		containerEl.createEl('h3', { text: '任务' });
 
 		new Setting(containerEl)
 			.setName('启用任务面板')

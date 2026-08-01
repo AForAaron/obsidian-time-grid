@@ -19,6 +19,7 @@ export type TaskFieldKind =
 	| 'cancelledDate'
 	| 'priority'
 	| 'recurrence'
+	| 'routine'
 	| 'id'
 	| 'blocked';
 
@@ -26,7 +27,8 @@ export type TaskDiagnosticCode =
 	| 'unparseable-line'
 	| 'unknown-status'
 	| 'invalid-date'
-	| 'duplicate-field';
+	| 'duplicate-field'
+	| 'routine-instance-invalid';
 
 export interface TaskDiagnostic {
 	code: TaskDiagnosticCode;
@@ -75,8 +77,18 @@ export interface TGTask {
 	tags: string[];
 	section: TaskSection;
 	hasRecurrence: boolean;
+	routine?: RoutineTaskMeta;
 	diagnostics: TaskDiagnostic[];
 	layout?: TaskLineLayout;
+}
+
+export interface RoutineTaskMeta {
+	groupId: string;
+	itemId?: string;
+	date: string;
+	reminderTime?: string;
+	todayOnly: boolean;
+	legacy: boolean;
 }
 
 export type DoneRange = 'today' | '7days' | 'all';
@@ -93,19 +105,6 @@ export interface TaskSettings {
 
 export interface TaskPanelState {
 	collapsed: Partial<Record<TaskSection, boolean>>;
-}
-
-export interface RoutineItemViewModel {
-	id: string;
-	title: string;
-	done: boolean;
-}
-
-export interface RoutineGroupViewModel {
-	id: string;
-	title: string;
-	subtitle?: string;
-	items: RoutineItemViewModel[];
 }
 
 export type TimeGridMode = 'time' | 'tasks';
@@ -156,4 +155,6 @@ export interface TaskPatch {
 	priority?: TaskPriority | null;
 	goal?: boolean;
 	status?: EditableTaskStatus;
+	routineReminderTime?: string | null;
+	routineGroupId?: string;
 }

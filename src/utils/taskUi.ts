@@ -1,4 +1,5 @@
-import { RoutineGroupViewModel, TGTask } from '../types/task';
+import { TGTask } from '../types/task';
+import { RoutineGroupViewModel } from '../types/routine';
 
 export type FloatingPreference = 'bottom' | 'right';
 export type FloatingPlacement = 'bottom' | 'top' | 'right' | 'left';
@@ -86,10 +87,12 @@ export function getTaskMenuActions(task: TGTask, writable: boolean): TaskMenuAct
 	return actions;
 }
 
-export function getRoutineProgress(group: RoutineGroupViewModel | undefined): { completed: number; total: number } | null {
+export function getRoutineProgress(
+	group: { items: Array<{ id?: string; title?: string; done?: boolean; task?: TGTask }>; id?: string; title?: string } | undefined
+): { completed: number; total: number } | null {
 	if (!group || group.items.length === 0) return null;
 	return {
-		completed: group.items.filter((item) => item.done).length,
+		completed: group.items.filter((item) => item.done === true || item.task?.status === 'done').length,
 		total: group.items.length,
 	};
 }

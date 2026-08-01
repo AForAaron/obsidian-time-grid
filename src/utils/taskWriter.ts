@@ -11,6 +11,7 @@ import {
 import { TaskIndex } from './taskIndex';
 import { getTodayKey } from './taskParser';
 import { countMixedWords, WritingStatsTracker } from './writingStats';
+import { serializeRoutineTaskMarker } from './routineMarker';
 
 interface ContentEditResult {
 	content: string;
@@ -141,14 +142,15 @@ export function serializeStatusChange(
 	const edits: TextEdit[] = [{ start: task.layout.statusIndex, end: task.layout.statusIndex + 1, replacement: statusChar(status) }];
 	const doneTokens = task.layout.fields.filter((field) => field.kind === 'doneDate');
 	const cancelledTokens = task.layout.fields.filter((field) => field.kind === 'cancelledDate');
+	const routineToken = task.layout.fields.find((field) => field.kind === 'routine');
 
 	if (status === 'done') {
 		for (const token of cancelledTokens) edits.push(removeTokenEdit(task.raw, token));
-		if (settings.recordTerminalDate) upsertDateField(edits, task.raw, doneTokens[0], '✅', today);
+		if (settings.recordTerminalDate) upsertDateField(edits, task.raw, doneTokens[0], '✅', today, routineToken?.start);
 		else for (const token of doneTokens) edits.push(removeTokenEdit(task.raw, token));
 	} else if (status === 'cancelled') {
 		for (const token of doneTokens) edits.push(removeTokenEdit(task.raw, token));
-		if (settings.recordTerminalDate) upsertDateField(edits, task.raw, cancelledTokens[0], '❌', today);
+		if (settings.recordTerminalDate) upsertDateField(edits, task.raw, cancelledTokens[0], '❌', today, routineToken?.start);
 		else for (const token of cancelledTokens) edits.push(removeTokenEdit(task.raw, token));
 	} else {
 		for (const token of [...doneTokens, ...cancelledTokens]) edits.push(removeTokenEdit(task.raw, token));
@@ -164,6 +166,8 @@ export function serializeTaskPatch(task: TGTask, patch: TaskPatch, settings: Tas
 	const goalTag = settings.goalTag.trim();
 	const goalPattern = exactTagPattern(goalTag);
 	const suffixGoalEdits: TextEdit[] = [];
+	const routineToken = task.layout.fields.find((field) => field.kind === 'routine');
+	const insertBefore = routineToken?.start;
 
 	if (patch.goal === false) {
 		description = normalizeDescriptionWhitespace(description.replace(goalPattern, ' '));
@@ -186,12 +190,24 @@ export function serializeTaskPatch(task: TGTask, patch: TaskPatch, settings: Tas
 
 	if (patch.due !== undefined) {
 		const dueToken = task.layout.fields.find((field) => field.kind === 'due');
-		patchKnownField(edits, task.raw, dueToken, patch.due ? `📅 ${patch.due}` : null);
+		patchKnownField(edits, task.raw, dueToken, patch.due ? `📅 ${patch.due}` : null, insertBefore);
 	}
 
 	if (patch.priority !== undefined) {
 		const priorityToken = task.layout.fields.find((field) => field.kind === 'priority');
-		patchKnownField(edits, task.raw, priorityToken, patch.priority ? priorityMarker(patch.priority) : null);
+		patchKnownField(edits, task.raw, priorityToken, patch.priority ? priorityMarker(patch.priority) : null, insertBefore);
+	}
+
+	if ((patch.routineReminderTime !== undefined || patch.routineGroupId !== undefined) && task.routine) {
+		const replacement = serializeRoutineTaskMarker({
+			...task.routine,
+			groupId: patch.routineGroupId ?? task.routine.groupId,
+			reminderTime: patch.routineReminderTime === undefined
+				? task.routine.reminderTime
+				: patch.routineReminderTime || undefined,
+		});
+		if (routineToken) edits.push({ start: routineToken.start, end: routineToken.end, replacement });
+		else edits.push({ start: task.raw.length, end: task.raw.length, replacement: ` ${replacement}` });
 	}
 
 	return normalizeKnownMarkerSpacing(applyTextEdits(task.raw, edits)).replace(/[ \t]+$/, '');
@@ -242,11 +258,19 @@ function statusChar(status: EditableTaskStatus): string {
 	return ({ todo: ' ', 'in-progress': '/', done: 'x', cancelled: '-' })[status];
 }
 
-function upsertDateField(edits: TextEdit[], raw: string, token: TaskFieldToken | undefined, marker: string, today: string): void {
+function upsertDateField(
+	edits: TextEdit[],
+	raw: string,
+	token: TaskFieldToken | undefined,
+	marker: string,
+	today: string,
+	insertBefore?: number
+): void {
 	if (token) {
 		edits.push({ start: token.start, end: token.end, replacement: `${marker} ${today}` });
 	} else {
-		edits.push({ start: raw.length, end: raw.length, replacement: ` ${marker} ${today}` });
+		const insertion = insertBefore ?? raw.length;
+		edits.push({ start: insertion, end: insertion, replacement: `${insertion === raw.length ? ' ' : ''}${marker} ${today}${insertion < raw.length ? ' ' : ''}` });
 	}
 }
 
@@ -256,13 +280,20 @@ function removeTokenEdit(raw: string, token: TaskFieldToken): TextEdit {
 	return { start, end: token.end, replacement: '' };
 }
 
-function patchKnownField(edits: TextEdit[], raw: string, token: TaskFieldToken | undefined, replacement: string | null): void {
+function patchKnownField(
+	edits: TextEdit[],
+	raw: string,
+	token: TaskFieldToken | undefined,
+	replacement: string | null,
+	insertBefore?: number
+): void {
 	if (token) {
 		edits.push(replacement === null
 			? removeTokenEdit(raw, token)
 			: { start: token.start, end: token.end, replacement });
 	} else if (replacement !== null) {
-		edits.push({ start: raw.length, end: raw.length, replacement: ` ${replacement}` });
+		const insertion = insertBefore ?? raw.length;
+		edits.push({ start: insertion, end: insertion, replacement: `${insertion === raw.length ? ' ' : ''}${replacement}${insertion < raw.length ? ' ' : ''}` });
 	}
 }
 

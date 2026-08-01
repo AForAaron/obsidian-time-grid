@@ -8,6 +8,7 @@ import {
 	TaskStatusKind,
 	TGTask,
 } from '../types/task';
+import { parseRoutineTaskMarker, ROUTINE_ITEM_INSTANCE_PREFIX } from './routineMarker';
 
 const DATE_FIELDS: Array<{ marker: string; kind: TaskFieldKind; property: keyof TGTask }> = [
 	{ marker: '📅', kind: 'due', property: 'due' },
@@ -40,6 +41,7 @@ const METADATA_MARKERS = [
 	'🔁',
 	'🆔',
 	'⛔',
+	ROUTINE_ITEM_INSTANCE_PREFIX,
 ];
 
 export function parseTaskLine(
@@ -106,6 +108,7 @@ export function parseTaskLine(
 		trailing: metadataStart === undefined ? [] : [raw.slice(metadataStart)],
 		tags: extractTags(body),
 		hasRecurrence: fields.some((field) => field.kind === 'recurrence'),
+		routine: parseRoutineTaskMarker(raw)?.meta,
 		diagnostics,
 		layout: {
 			statusIndex,
@@ -274,6 +277,17 @@ function findFieldTokens(raw: string, bodyStart: number, diagnostics: TaskDiagno
 			tokens.push({ kind, start: index, end, raw: raw.slice(index, end) });
 			cursor = Math.max(end, index + marker.length);
 		}
+	}
+
+	const routineMarker = parseRoutineTaskMarker(raw);
+	if (routineMarker) {
+		tokens.push({
+			kind: 'routine',
+			start: routineMarker.start,
+			end: routineMarker.end,
+			raw: raw.slice(routineMarker.start, routineMarker.end),
+			value: routineMarker.meta.itemId,
+		});
 	}
 
 	return tokens.sort((a, b) => a.start - b.start || a.end - b.end);

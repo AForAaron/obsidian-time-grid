@@ -8,6 +8,7 @@ import {
 	TaskSettings,
 	TimeGridUiState,
 } from '../types/task';
+import { DEFAULT_ROUTINE_SETTINGS, RoutineSettings } from '../types/routine';
 import { getDailyNoteFilename } from './dailyNotesParser';
 
 export type WritingStatsData = {
@@ -20,6 +21,7 @@ export type TimeGridPluginData = {
 	taskSettings: TaskSettings;
 	taskPanelState: TaskPanelState;
 	uiState: TimeGridUiState;
+	routineSettings: RoutineSettings;
 };
 
 export const DEFAULT_TIME_GRID_DATA: TimeGridPluginData = {
@@ -32,6 +34,7 @@ export const DEFAULT_TIME_GRID_DATA: TimeGridPluginData = {
 		collapsed: { ...DEFAULT_TASK_PANEL_STATE.collapsed },
 	},
 	uiState: { ...DEFAULT_TIME_GRID_UI_STATE },
+	routineSettings: { ...DEFAULT_ROUTINE_SETTINGS, reminderLog: {} },
 };
 
 export const HEATMAP_RANGES = {
@@ -203,6 +206,7 @@ export function normalizeTimeGridData(raw: unknown): TimeGridPluginData {
 		uiState: {
 			activeMode: input.uiState?.activeMode === 'tasks' ? 'tasks' : 'time',
 		},
+		routineSettings: normalizeRoutineSettings(input.routineSettings),
 	};
 }
 
@@ -230,4 +234,16 @@ function normalizeDoneRange(value: unknown): DoneRange {
 function normalizeRenderLimit(value: unknown): number {
 	if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_TASK_SETTINGS.renderLimit;
 	return Math.min(1000, Math.max(1, Math.round(value)));
+}
+
+function normalizeRoutineSettings(value: RoutineSettings | undefined): RoutineSettings {
+	return {
+		...DEFAULT_ROUTINE_SETTINGS,
+		...(value ?? {}),
+		definitionPath: value?.definitionPath?.trim() || DEFAULT_ROUTINE_SETTINGS.definitionPath,
+		migrationVersion: typeof value?.migrationVersion === 'number' && Number.isFinite(value.migrationVersion)
+			? Math.max(0, Math.round(value.migrationVersion))
+			: 0,
+		reminderLog: { ...(value?.reminderLog ?? {}) },
+	};
 }
