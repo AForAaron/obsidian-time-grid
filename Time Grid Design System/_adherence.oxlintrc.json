@@ -1,0 +1,324 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "components/core/Icon/**",
+              "components/core/StatCard/**",
+              "components/modules/DailyPieChart/**",
+              "components/modules/DayGrid/**",
+              "components/modules/HourGrid/**",
+              "components/modules/MonthHeatmap/**",
+              "components/modules/SectionHeader/**",
+              "components/modules/TaskCard/**",
+              "components/modules/TimeHeatmap/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Inter))/i]",
+        "message": "Font not provided by the design system. Available: Inter."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='DailyPieBucket'] > JSXAttribute > JSXIdentifier[name!=/^(?:name|durationMs|isRunning|key|ref|className|style|children)$/]",
+        "message": "<DailyPieBucket> doesn't accept that prop. Declared props: name, durationMs, isRunning."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='DayGrid'] > JSXAttribute > JSXIdentifier[name!=/^(?:now|key|ref|className|style|children)$/]",
+        "message": "<DayGrid> doesn't accept that prop. Declared props: now."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='HourGrid'] > JSXAttribute > JSXIdentifier[name!=/^(?:now|key|ref|className|style|children)$/]",
+        "message": "<HourGrid> doesn't accept that prop. Declared props: now."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Icon'] > JSXAttribute > JSXIdentifier[name!=/^(?:name|size|key|ref|className|style|children)$/]",
+        "message": "<Icon> doesn't accept that prop. Declared props: name, size."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Icon'] > JSXAttribute[name.name='name'] > Literal[value!=/^(?:month|day|hour|pie|chevronLeft|chevronRight)$/]",
+        "message": "<Icon> name must be one of 'month' | 'day' | 'hour' | 'pie' | 'chevronLeft' | 'chevronRight'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='MonthHeatmap'] > JSXAttribute > JSXIdentifier[name!=/^(?:now|key|ref|className|style|children)$/]",
+        "message": "<MonthHeatmap> doesn't accept that prop. Declared props: now."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='SectionHeader'] > JSXAttribute > JSXIdentifier[name!=/^(?:icon|title|subtitle|count|matchCount|fixed|collapsed|onToggle|accentColor|key|ref|className|style|children)$/]",
+        "message": "<SectionHeader> doesn't accept that prop. Declared props: icon, title, subtitle, count, matchCount, fixed, collapsed, onToggle, accentColor."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='StatCard'] > JSXAttribute > JSXIdentifier[name!=/^(?:icon|value|label|accentColor|key|ref|className|style|children)$/]",
+        "message": "<StatCard> doesn't accept that prop. Declared props: icon, value, label, accentColor."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='TaskCard'] > JSXAttribute > JSXIdentifier[name!=/^(?:title|status|accentColor|dueDate|overdue|priority|readonly|readonlyReason|sourceFile|writing|onToggle|onMore|onTitleClick|onEdit|onPostpone|key|ref|className|style|children)$/]",
+        "message": "<TaskCard> doesn't accept that prop. Declared props: title, status, accentColor, dueDate, overdue, priority, readonly, readonlyReason, sourceFile, writing, onToggle, onMore, onTitleClick, onEdit, onPostpone."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='TimeHeatmap'] > JSXAttribute > JSXIdentifier[name!=/^(?:now|weeks|key|ref|className|style|children)$/]",
+        "message": "<TimeHeatmap> doesn't accept that prop. Declared props: now, weeks."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {
+      "DailyPieBucket": {
+        "replaces": []
+      },
+      "DayGrid": {
+        "replaces": []
+      },
+      "HourGrid": {
+        "replaces": []
+      },
+      "Icon": {
+        "replaces": []
+      },
+      "MonthHeatmap": {
+        "replaces": []
+      },
+      "SectionHeader": {
+        "replaces": []
+      },
+      "StatCard": {
+        "replaces": []
+      },
+      "TaskCard": {
+        "replaces": []
+      },
+      "TimeHeatmap": {
+        "replaces": []
+      }
+    },
+    "tokens": [
+      "--border-default",
+      "--border-error",
+      "--border-focus",
+      "--border-subtle",
+      "--duration-cell",
+      "--duration-fast",
+      "--duration-heat",
+      "--duration-pulse",
+      "--ease-standard",
+      "--font-mono",
+      "--font-ui",
+      "--heat-1",
+      "--heat-2",
+      "--heat-3",
+      "--heat-4",
+      "--heat-empty",
+      "--leading-normal",
+      "--leading-snug",
+      "--leading-tight",
+      "--radius-md",
+      "--radius-pill",
+      "--radius-sm",
+      "--shadow-menu",
+      "--shadow-popover",
+      "--shadow-tooltip",
+      "--space-1",
+      "--space-2",
+      "--space-3",
+      "--space-4",
+      "--space-5",
+      "--space-6",
+      "--space-7",
+      "--space-8",
+      "--surface-app",
+      "--surface-hover",
+      "--surface-overlay",
+      "--surface-panel",
+      "--surface-sunken",
+      "--text-2xl",
+      "--text-2xs",
+      "--text-base",
+      "--text-faint",
+      "--text-lg",
+      "--text-md",
+      "--text-muted",
+      "--text-on-accent",
+      "--text-primary",
+      "--text-sm",
+      "--text-xl",
+      "--text-xs",
+      "--tg-accent",
+      "--tg-accent-strong",
+      "--tg-cell-radius",
+      "--tg-cell-size",
+      "--tg-gap",
+      "--tg-gray-100",
+      "--tg-gray-200",
+      "--tg-gray-300",
+      "--tg-gray-400",
+      "--tg-gray-50",
+      "--tg-gray-500",
+      "--tg-gray-600",
+      "--tg-gray-700",
+      "--tg-gray-750",
+      "--tg-gray-800",
+      "--tg-gray-850",
+      "--tg-gray-900",
+      "--tg-gray-950",
+      "--tg-heatmap-cell-size",
+      "--tg-heatmap-gap",
+      "--tg-minute-size",
+      "--tg-module-padding",
+      "--tg-panel-radius",
+      "--tg-status-cancelled",
+      "--tg-status-done",
+      "--tg-status-future",
+      "--tg-status-longterm",
+      "--tg-status-overdue",
+      "--tg-status-readonly",
+      "--tg-status-today",
+      "--tg-status-triage",
+      "--tg-today-ring",
+      "--tg-viz-1",
+      "--tg-viz-2",
+      "--tg-viz-3",
+      "--tg-viz-4",
+      "--tg-viz-5",
+      "--tg-viz-6",
+      "--tg-viz-7",
+      "--tg-viz-8",
+      "--touch-comfortable",
+      "--touch-min",
+      "--tracking-wide"
+    ],
+    "tokenKinds": {
+      "--tg-gray-950": "color",
+      "--tg-gray-900": "color",
+      "--tg-gray-850": "color",
+      "--tg-gray-800": "color",
+      "--tg-gray-750": "color",
+      "--tg-gray-700": "color",
+      "--tg-gray-600": "color",
+      "--tg-gray-500": "color",
+      "--tg-gray-400": "color",
+      "--tg-gray-300": "color",
+      "--tg-gray-200": "color",
+      "--tg-gray-100": "color",
+      "--tg-gray-50": "color",
+      "--tg-accent": "color",
+      "--tg-accent-strong": "color",
+      "--tg-today-ring": "color",
+      "--tg-viz-1": "color",
+      "--tg-viz-2": "color",
+      "--tg-viz-3": "color",
+      "--tg-viz-4": "color",
+      "--tg-viz-5": "color",
+      "--tg-viz-6": "color",
+      "--tg-viz-7": "color",
+      "--tg-viz-8": "color",
+      "--surface-app": "color",
+      "--surface-panel": "color",
+      "--surface-sunken": "color",
+      "--surface-hover": "color",
+      "--border-default": "color",
+      "--border-subtle": "color",
+      "--text-primary": "font",
+      "--text-muted": "font",
+      "--text-faint": "font",
+      "--text-on-accent": "font",
+      "--heat-empty": "color",
+      "--heat-1": "color",
+      "--heat-2": "color",
+      "--heat-3": "color",
+      "--heat-4": "color",
+      "--tg-status-overdue": "color",
+      "--tg-status-today": "color",
+      "--tg-status-triage": "color",
+      "--tg-status-longterm": "color",
+      "--tg-status-future": "color",
+      "--tg-status-done": "color",
+      "--tg-status-cancelled": "color",
+      "--tg-status-readonly": "color",
+      "--surface-overlay": "color",
+      "--border-focus": "color",
+      "--border-error": "color",
+      "--font-ui": "font",
+      "--font-mono": "font",
+      "--text-2xs": "font",
+      "--text-xs": "font",
+      "--text-sm": "font",
+      "--text-base": "font",
+      "--text-md": "font",
+      "--text-lg": "font",
+      "--text-xl": "font",
+      "--text-2xl": "font",
+      "--leading-tight": "font",
+      "--leading-snug": "font",
+      "--leading-normal": "font",
+      "--tracking-wide": "font",
+      "--space-1": "spacing",
+      "--space-2": "spacing",
+      "--space-3": "spacing",
+      "--space-4": "spacing",
+      "--space-5": "spacing",
+      "--space-6": "spacing",
+      "--space-7": "spacing",
+      "--space-8": "spacing",
+      "--tg-cell-size": "spacing",
+      "--tg-minute-size": "spacing",
+      "--tg-panel-radius": "radius",
+      "--tg-cell-radius": "radius",
+      "--tg-module-padding": "spacing",
+      "--tg-gap": "spacing",
+      "--tg-heatmap-cell-size": "spacing",
+      "--tg-heatmap-gap": "spacing",
+      "--touch-min": "spacing",
+      "--touch-comfortable": "spacing",
+      "--radius-sm": "radius",
+      "--radius-md": "radius",
+      "--radius-pill": "radius",
+      "--shadow-tooltip": "shadow",
+      "--shadow-menu": "shadow",
+      "--shadow-popover": "shadow",
+      "--ease-standard": "other",
+      "--duration-cell": "other",
+      "--duration-heat": "other",
+      "--duration-fast": "other",
+      "--duration-pulse": "other"
+    },
+    "fontFamilies": [
+      "Inter"
+    ]
+  }
+}

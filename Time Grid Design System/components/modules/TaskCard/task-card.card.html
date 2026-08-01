@@ -1,0 +1,23 @@
+<!-- @dsCard group="Components" viewport="700x640" name="Task Card" subtitle="All states: todo, doing, done, cancelled, overdue, readonly, writing" -->
+<html><head><link rel="stylesheet" href="../../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../../_ds_bundle.js"></script>
+<style>body{margin:0;background:var(--surface-app);padding:16px;display:flex;flex-direction:column;gap:8px;max-width:380px}</style>
+</head><body>
+<div id="root"></div>
+<script type="text/babel">
+const { TaskCard } = window.TimeGridDesignSystem_80c9b5;
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment>
+  <TaskCard title="今天要发的周报" status="todo" accentColor="--tg-status-today" dueDate="今天" priority="P2" />
+  <TaskCard title="Review the onboarding funnel copy end to end" status="doing" accentColor="--tg-status-today" dueDate="今天" />
+  <TaskCard title="修好日历同步" status="todo" accentColor="--tg-status-overdue" dueDate="8月3日" overdue={true} priority="P1" />
+  <TaskCard title="Alpha" status="done" accentColor="--tg-status-done" />
+  <TaskCard title="Bravo" status="cancelled" accentColor="--tg-status-cancelled" />
+  <TaskCard title="Recurring standup notes" status="todo" accentColor="--tg-status-longterm" readonly={true} readonlyReason="循环 · 只读" />
+  <TaskCard title="Malformed date field" status="unknown" readonly={true} readonlyReason="格式异常 · 只读" />
+  <TaskCard title="正在写回 Markdown…" status="todo" accentColor="--tg-status-today" writing={true} />
+</React.Fragment>);
+</script>
+</body></html>
