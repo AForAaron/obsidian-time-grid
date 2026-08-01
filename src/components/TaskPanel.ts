@@ -1,6 +1,7 @@
 import { App, MarkdownView, setIcon, TFile } from 'obsidian';
 import {
 	EditableTaskStatus,
+	TaskPatch,
 	TaskPanelState,
 	TaskSection,
 	TaskSettings,
@@ -8,6 +9,7 @@ import {
 	TGTask,
 	WriteResult,
 } from '../types/task';
+import { TaskEditModal } from './TaskEditModal';
 import { TaskIndex } from '../utils/taskIndex';
 import { getTodayKey, sortTasks, terminalDate } from '../utils/taskParser';
 import { getTaskWriteBlockReason } from '../utils/taskWriter';
@@ -21,6 +23,7 @@ interface TaskPanelOptions {
 	actions?: {
 		toggleDone: (task: TGTask) => Promise<WriteResult>;
 		setStatus: (task: TGTask, status: EditableTaskStatus) => Promise<WriteResult>;
+		updateTask: (task: TGTask, patch: TaskPatch) => Promise<WriteResult>;
 	};
 }
 
@@ -166,8 +169,12 @@ export class TaskPanel {
 		const body = row.createDiv('tg-task-body');
 		const description = body.createEl('button', { cls: 'tg-task-description' });
 		description.setText(task.description || task.raw.trim());
-		description.setAttr('aria-label', `打开源文件：${task.filePath} 第 ${task.line + 1} 行`);
-		description.addEventListener('click', () => void this.openSource(task));
+		description.setAttr('aria-label', `编辑任务 ${task.description || task.raw.trim()}`);
+		description.setAttr('title', blockReason ?? '点击编辑；⌘/Ctrl 点击打开源文件');
+		description.addEventListener('click', (event) => {
+			if (event.metaKey || event.ctrlKey) void this.openSource(task);
+			else this.openEditor(task);
+		});
 
 		if (this.options.getSettings().showFileName) {
 			body.createDiv({ cls: 'tg-task-file', text: fileName(task.filePath) });
@@ -221,6 +228,18 @@ export class TaskPanel {
 		await this.options.actions.setStatus(task, status);
 		this.pendingStatuses.delete(task.id);
 		this.render();
+	}
+
+	private openEditor(task: TGTask): void {
+		if (!this.options.actions) {
+			void this.openSource(task);
+			return;
+		}
+		new TaskEditModal(this.app, task, {
+			getSettings: this.options.getSettings,
+			save: (patch) => this.options.actions!.updateTask(task, patch),
+			openSource: () => this.openSource(task),
+		}).open();
 	}
 
 	private isCollapsed(section: TaskSection): boolean {

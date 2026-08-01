@@ -7,7 +7,7 @@ import {
 	sortTasks,
 } from '../src/utils/taskParser';
 import { DEFAULT_TASK_SETTINGS } from '../src/types/task';
-import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange } from '../src/utils/taskWriter';
+import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange, serializeTaskPatch } from '../src/utils/taskWriter';
 import { getEffectiveWritingDelta } from '../src/utils/writingStats';
 
 let passed = 0;
@@ -170,6 +170,35 @@ test('status edits preserve unknown metadata ordering and text', () => {
 test('task-write suppression preserves concurrent external writing deltas', () => {
 	assert.equal(getEffectiveWritingDelta(6, 1), 5);
 	assert.equal(getEffectiveWritingDelta(-3, -1), -2);
+});
+
+test('task patch edits selected fields while preserving opaque metadata text and order', () => {
+	const task = parseTaskLine('- [ ] Old 🆔 abc custom ⛔ dep 📅 2026-08-02 🔽', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const raw = serializeTaskPatch(task, {
+		description: 'New',
+		due: '2026-08-10',
+		priority: 'high',
+		goal: true,
+	}, DEFAULT_TASK_SETTINGS);
+	assert.equal(raw, '- [ ] New #goal 🆔 abc custom ⛔ dep 📅 2026-08-10 ⏫');
+});
+
+test('task patch can clear due priority and long-term tag without moving unknown fields', () => {
+	const task = parseTaskLine('- [ ] Project #goal 📅 2026-08-02 ⏫ 🆔 keep', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const raw = serializeTaskPatch(task, { due: null, priority: null, goal: false }, DEFAULT_TASK_SETTINGS);
+	assert.equal(raw, '- [ ] Project 🆔 keep');
+});
+
+test('task patch can add due and priority fields to a plain task', () => {
+	const task = parseTaskLine('- [ ] Plain', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const raw = serializeTaskPatch(task, { due: '2026-08-09', priority: 'medium' }, DEFAULT_TASK_SETTINGS);
+	assert.equal(raw, '- [ ] Plain 🔼 📅 2026-08-09');
+});
+
+test('removing a long-term tag after opaque metadata preserves the remaining suffix', () => {
+	const task = parseTaskLine('- [ ] Work 🆔 abc #goal', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const raw = serializeTaskPatch(task, { goal: false }, DEFAULT_TASK_SETTINGS);
+	assert.equal(raw, '- [ ] Work 🆔 abc');
 });
 
 console.log(`\n${passed} task core tests passed.`);

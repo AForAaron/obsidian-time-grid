@@ -1057,3 +1057,141 @@
 		font-size: 13px;
 	}
 }
+
+.modal.tg-task-edit-modal {
+	width: min(560px, calc(100vw - 28px));
+}
+
+.tg-task-modal-form,
+.tg-task-modal-field {
+	display: flex;
+	flex-direction: column;
+}
+
+.tg-task-modal-form {
+	gap: 16px;
+}
+
+.tg-task-modal-field {
+	gap: 7px;
+}
+
+.tg-task-modal-field > label {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-muted);
+}
+
+.tg-task-modal-description {
+	width: 100%;
+	min-height: 82px;
+	resize: vertical;
+}
+
+.tg-task-modal-quick-dates {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.tg-task-modal-quick-dates button {
+	padding: 4px 9px;
+	font-size: 11px;
+}
+
+.tg-task-modal-switch-field {
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.tg-task-modal-switch {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+}
+
+.tg-task-modal-source {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 0;
+	font-size: 11px;
+	color: var(--text-muted);
+	word-break: break-all;
+}
+
+.tg-task-modal-source-icon,
+.tg-task-modal-source-icon svg {
+	width: 14px;
+	height: 14px;
+	flex: 0 0 auto;
+}
+
+.tg-task-modal-error {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 10px;
+	border: 1px solid var(--background-modifier-error);
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--background-modifier-error) 12%, transparent);
+	color: var(--text-error);
+	font-size: 12px;
+	white-space: pre-wrap;
+}
+
+.tg-task-modal-error.is-hidden {
+	display: none;
+}
+
+.tg-task-modal-error button {
+	display: inline-flex;
+	flex: 0 0 auto;
+	padding: 4px;
+}
+
+.tg-task-modal-error button svg {
+	width: 14px;
+	height: 14px;
+}
+
+.tg-task-modal-diagnostic {
+	padding: 11px;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--background-modifier-error) 10%, transparent);
+	color: var(--text-error);
+	font-size: 12px;
+}
+
+.tg-task-modal-raw {
+	max-height: 180px;
+	overflow: auto;
+	margin: 12px 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.tg-task-modal-footer {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+.tg-task-modal-footer-spacer {
+	flex: 1;
+}
+
+@media (max-width: 500px) {
+	.modal.tg-task-edit-modal {
+		width: calc(100vw - 16px);
+		padding: 18px 14px;
+	}
+
+	.tg-task-modal-footer {
+		flex-wrap: wrap;
+	}
+}

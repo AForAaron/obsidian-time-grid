@@ -16,7 +16,8 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/components/DayGrid.ts`：24 小时网格
   - `src/components/HourGrid.ts`：当前小时 60 分钟网格
   - `src/components/DailyPieChart.ts`：今日 `simple-time-tracker` 计时分布圆环图，含默认空状态、进行中状态和状态说明
-  - `src/components/TaskPanel.ts`：全库任务索引、六分区列表、四态管理、折叠状态与源文件跳转
+  - `src/components/TaskPanel.ts`：全库任务索引、六分区列表、四态管理、编辑入口、折叠状态与源文件跳转
+  - `src/components/TaskEditModal.ts`：描述、到期日、优先级和长期标签编辑弹窗，含只读诊断与可复制错误
 - 数据工具：
   - `src/utils/dailyNotes.ts`：打开或创建日记
   - `src/utils/dailyNotesParser.ts`：读取日记日期与 `simple-time-tracker` 数据
@@ -59,7 +60,8 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 当前没有单独测试框架；现阶段以 `npm run build`、生产打包和 Obsidian 内手动检查作为主要验证方式。
 - 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433。
 - 任务模块 Phase 2 已完成：四态菜单、完成/重新打开快捷按钮、终态日期、严格唯一定位、失败重扫和写作统计抑制已接入；异常、未知状态、循环和重复任务保持只读或拒写。
-- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 21 个任务解析、状态转换、分区、排序、路径排除、安全写回和统计抑制用例。
+- 任务模块 Phase 3 已完成：支持编辑描述、到期日、优先级和长期标签；失败时弹窗保持打开并提供可复制错误；只读任务只显示诊断和源文件入口。
+- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 25 个任务解析、状态转换、分区、排序、路径排除、字段级安全写回和统计抑制用例。
 
 ## 修改等级
 
@@ -141,3 +143,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`manifest.json`、`src/utils/taskWriter.ts`、`src/components/TaskPanel.ts`、`src/utils/writingStats.ts`、`src/main.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/obsidianStub.ts`、`tests/taskCore.test.ts`、`scripts/run-task-tests.mjs`
 - 验证方式：`npm test` 21 项通过；`npm run build` 通过；在专用临时 Git vault 中通过 Obsidian 1.12.7 完成 17 次真实状态写入，确认无空白差异、终态日期正确、历史缺空格任务在合法编辑后规范化。
 - 后续注意事项：临时 vault 的 20 次综合写入及编辑器并发验收将在 Phase 3–4 补足；真实 vault 继续只做非破坏性检查。
+
+### 2026-08-01（任务模块 Phase 3）
+
+- 修改等级：L3 跨模块改动
+- 变更摘要：新增任务编辑弹窗，支持描述、到期日快捷选择/清除、优先级和长期标签；字段级序列化只修改目标字段并保留未知元数据；只读任务显示诊断，保存失败保持弹窗并显示可复制错误。
+- 涉及文件：`src/components/TaskEditModal.ts`、`src/components/TaskPanel.ts`、`src/utils/taskWriter.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`
+- 验证方式：`npm test` 25 项通过；`npm run build` 通过；专用临时 Git vault 累计完成 20 次真实写入，并验证四字段联合编辑、快捷日期不提交表单、重复原文拒写后弹窗保持打开且文件无变化。
+- 后续注意事项：Phase 4 继续复用同一 writer 定位路径；删除仅移除目标行，顺延只对有到期日任务显示，最终补做编辑器并发测试。

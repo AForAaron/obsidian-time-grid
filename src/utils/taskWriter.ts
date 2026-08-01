@@ -2,6 +2,8 @@ import { App, Notice, TFile } from 'obsidian';
 import {
 	EditableTaskStatus,
 	TaskFieldToken,
+	TaskPatch,
+	TaskPriority,
 	TaskSettings,
 	TGTask,
 	WriteResult,
@@ -48,6 +50,14 @@ export class TaskWriter {
 		const blocked = getTaskWriteBlockReason(task);
 		if (blocked) return this.fail(task, { ok: false, reason: 'read-only-task', message: blocked });
 		const newRaw = serializeStatusChange(task, status, this.getSettings(), getTodayKey());
+		return this.applyEdit(task, newRaw);
+	}
+
+	async updateTask(task: TGTask, patch: TaskPatch): Promise<WriteResult> {
+		const blocked = getTaskWriteBlockReason(task);
+		if (blocked) return this.fail(task, { ok: false, reason: 'read-only-task', message: blocked });
+		const newRaw = serializeTaskPatch(task, patch, this.getSettings());
+		if (newRaw === task.raw) return { ok: true };
 		return this.applyEdit(task, newRaw);
 	}
 
@@ -132,6 +142,46 @@ export function serializeStatusChange(
 	return normalizeKnownMarkerSpacing(applyTextEdits(task.raw, edits)).replace(/[ \t]+$/, '');
 }
 
+export function serializeTaskPatch(task: TGTask, patch: TaskPatch, settings: TaskSettings): string {
+	if (!task.layout) return task.raw;
+	const edits: TextEdit[] = [];
+	let description = (patch.description ?? task.description).trim();
+	const goalTag = settings.goalTag.trim();
+	const goalPattern = exactTagPattern(goalTag);
+	const suffixGoalEdits: TextEdit[] = [];
+
+	if (patch.goal === false) {
+		description = normalizeDescriptionWhitespace(description.replace(goalPattern, ' '));
+		const suffix = task.raw.slice(task.layout.descriptionEnd);
+		for (const match of suffix.matchAll(exactTagPattern(goalTag))) {
+			if (match.index === undefined) continue;
+			const tagOffset = match[1]?.length ?? 0;
+			const start = task.layout.descriptionEnd + match.index + tagOffset;
+			suffixGoalEdits.push(removeInlineTokenEdit(task.raw, start, start + goalTag.length));
+		}
+	} else if (patch.goal === true && !hasExactTag(`${description} ${task.raw.slice(task.layout.descriptionEnd)}`, goalTag)) {
+		description = `${description}${description ? ' ' : ''}${goalTag}`;
+	}
+
+	if (patch.description !== undefined || patch.goal !== undefined) {
+		const replacement = task.layout.metadataStart === undefined ? description : `${description}${description ? ' ' : ''}`;
+		edits.push({ start: task.layout.descriptionStart, end: task.layout.descriptionEnd, replacement });
+		edits.push(...suffixGoalEdits);
+	}
+
+	if (patch.due !== undefined) {
+		const dueToken = task.layout.fields.find((field) => field.kind === 'due');
+		patchKnownField(edits, task.raw, dueToken, patch.due ? `📅 ${patch.due}` : null);
+	}
+
+	if (patch.priority !== undefined) {
+		const priorityToken = task.layout.fields.find((field) => field.kind === 'priority');
+		patchKnownField(edits, task.raw, priorityToken, patch.priority ? priorityMarker(patch.priority) : null);
+	}
+
+	return normalizeKnownMarkerSpacing(applyTextEdits(task.raw, edits)).replace(/[ \t]+$/, '');
+}
+
 export function applyTaskEditToContent(content: string, task: TGTask, newRaw: string | null): ContentEditResult {
 	const lines = splitPreservingLineEndings(content);
 	const target = task.raw.trim();
@@ -182,6 +232,41 @@ function removeTokenEdit(raw: string, token: TaskFieldToken): TextEdit {
 	let start = token.start;
 	while (start > 0 && (raw[start - 1] === ' ' || raw[start - 1] === '\t')) start--;
 	return { start, end: token.end, replacement: '' };
+}
+
+function patchKnownField(edits: TextEdit[], raw: string, token: TaskFieldToken | undefined, replacement: string | null): void {
+	if (token) {
+		edits.push(replacement === null
+			? removeTokenEdit(raw, token)
+			: { start: token.start, end: token.end, replacement });
+	} else if (replacement !== null) {
+		edits.push({ start: raw.length, end: raw.length, replacement: ` ${replacement}` });
+	}
+}
+
+function priorityMarker(priority: TaskPriority): string {
+	return ({ highest: '🔺', high: '⏫', medium: '🔼', low: '🔽', lowest: '⏬' })[priority];
+}
+
+function exactTagPattern(tag: string): RegExp {
+	return new RegExp(`(^|\\s)${escapeRegExp(tag)}(?=\\s|$)`, 'giu');
+}
+
+function hasExactTag(text: string, tag: string): boolean {
+	return exactTagPattern(tag).test(text);
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeDescriptionWhitespace(value: string): string {
+	return value.trim().replace(/[ \t]{2,}/g, ' ');
+}
+
+function removeInlineTokenEdit(raw: string, start: number, end: number): TextEdit {
+	while (start > 0 && (raw[start - 1] === ' ' || raw[start - 1] === '\t')) start--;
+	return { start, end, replacement: '' };
 }
 
 function applyTextEdits(raw: string, edits: TextEdit[]): string {

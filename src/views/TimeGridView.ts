@@ -85,6 +85,7 @@ export class TimeGridView extends ItemView {
 			actions: {
 				toggleDone: (task) => this.taskWriter.toggleDone(task),
 				setStatus: (task, status) => this.taskWriter.setStatus(task, status),
+				updateTask: (task, patch) => this.taskWriter.updateTask(task, patch),
 			},
 		});
 
