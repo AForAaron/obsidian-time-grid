@@ -16,11 +16,14 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/components/DayGrid.ts`：24 小时网格
   - `src/components/HourGrid.ts`：当前小时 60 分钟网格
   - `src/components/DailyPieChart.ts`：今日 `simple-time-tracker` 计时分布圆环图，含默认空状态、进行中状态和状态说明
+  - `src/components/TaskPanel.ts`：全库任务只读索引、六分区列表、折叠状态与源文件跳转
 - 数据工具：
   - `src/utils/dailyNotes.ts`：打开或创建日记
   - `src/utils/dailyNotesParser.ts`：读取日记日期与 `simple-time-tracker` 数据
   - `src/utils/writingStats.ts`：统计启用后全库 Markdown 新增字数
   - `src/utils/icons.ts`：图标工具
+  - `src/utils/taskParser.ts`：Tasks emoji 语法解析、状态语义、分区与排序纯函数
+  - `src/utils/taskIndex.ts`：基于 metadataCache 的全量与增量任务索引
 - 样式入口：`src/styles/main.css`
 - 构建配置：`esbuild.config.mjs`
 - 插件清单：`manifest.json`
@@ -33,6 +36,8 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 今日计时分布会区分无日记、无计时块、格式错误、空记录和有效记录；没有计时时仍显示默认空圆环。
 - `simple-time-tracker` 时长按当前日期边界裁剪，避免跨日计时污染单日统计。
 - 新增字数统计从插件启用后建立基线，不回填历史新增字数。
+- 任务模块使用 `metadataCache.listItems` 定位任务，扫描期间异步分批；当前 Phase 1 保持零写操作。
+- 任务按逾期、今天、待分类、长期、未来、已完成六区全量归类；异常、未知状态和循环任务仍显示并标注只读。
 - 目前没有独立测试框架；修改后至少运行 `npm run build` 做 TypeScript 与打包验证。
 - 根目录 `main.js` 和 `styles.css` 是构建/发布产物，受 `.gitignore` 忽略；修改源码后需要重新构建，并用 `install.sh` 同步到实际 Obsidian vault 的 `.obsidian/plugins/time-grid/`。
 - 安装到 Obsidian 后，需要关闭/开启 Time Grid 插件、执行 Reload app without saving，或重启 Obsidian 才能加载新的 JS/CSS。
@@ -49,6 +54,8 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 写作增量统计已具备：插件启用后为全库 Markdown 建立字数基线，并按日期记录新增字数。
 - 最新构建/安装状态：上一轮功能改动已通过 TypeScript 检查和生产打包，并同步到两个 Obsidian vault 的 `time-grid` 插件目录。
 - 当前没有单独测试框架；现阶段以 `npm run build`、生产打包和 Obsidian 内手动检查作为主要验证方式。
+- 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433；尚未接入任何任务写操作。
+- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 9 个任务解析、状态、分区、排序和排除路径用例。
 
 ## 修改等级
 
@@ -114,3 +121,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`PROJECT_CONTEXT.md`
 - 验证方式：未运行构建；本次只修改项目上下文文档，不影响运行时代码。
 - 后续注意事项：后续每次完成代码或安装验证后，优先更新“当前进度”和“变更记录”，保持该文件代表最新项目状态。
+
+### 2026-08-01（任务模块 Phase 1）
+
+- 修改等级：L2 功能增强
+- 变更摘要：新增全库任务只读索引和六分区面板；支持 Tasks emoji 字段、四态解析、异常只读、折叠持久化、手动重扫、源文件跳转、渲染上限及任务设置。
+- 涉及文件：`src/types/task.ts`、`src/utils/taskParser.ts`、`src/utils/taskIndex.ts`、`src/components/TaskPanel.ts`、`src/main.ts`、`src/views/TimeGridView.ts`、`src/utils/writingStats.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`
+- 验证方式：`npm test` 9 项通过；`npm run build` 通过；同步至两个真实 vault，并在 Aaron_Ob 的 Obsidian 1.12.7 中确认面板索引 625 条、分区和 50 条渲染限制正常。
+- 后续注意事项：Phase 1 为零写操作；Phase 2 才接入 `Vault.process()`、四态管理、严格重复拒写和终态日期。

@@ -1,4 +1,11 @@
 import { Plugin, TAbstractFile, TFile } from 'obsidian';
+import {
+	DEFAULT_TASK_PANEL_STATE,
+	DEFAULT_TASK_SETTINGS,
+	DoneRange,
+	TaskPanelState,
+	TaskSettings,
+} from '../types/task';
 import { getDailyNoteFilename } from './dailyNotesParser';
 
 export type WritingStatsData = {
@@ -8,12 +15,18 @@ export type WritingStatsData = {
 
 export type TimeGridPluginData = {
 	writingStats: WritingStatsData;
+	taskSettings: TaskSettings;
+	taskPanelState: TaskPanelState;
 };
 
 export const DEFAULT_TIME_GRID_DATA: TimeGridPluginData = {
 	writingStats: {
 		fileBaselines: {},
 		dailyWordIncrements: {},
+	},
+	taskSettings: { ...DEFAULT_TASK_SETTINGS },
+	taskPanelState: {
+		collapsed: { ...DEFAULT_TASK_PANEL_STATE.collapsed },
 	},
 };
 
@@ -150,6 +163,7 @@ export class WritingStatsTracker {
 
 export function normalizeTimeGridData(raw: unknown): TimeGridPluginData {
 	const input = (raw ?? {}) as Partial<TimeGridPluginData>;
+	const taskSettings = input.taskSettings as Partial<TaskSettings> | undefined;
 	return {
 		writingStats: {
 			fileBaselines: {
@@ -157,6 +171,18 @@ export function normalizeTimeGridData(raw: unknown): TimeGridPluginData {
 			},
 			dailyWordIncrements: {
 				...(input.writingStats?.dailyWordIncrements ?? {}),
+			},
+		},
+		taskSettings: {
+			...DEFAULT_TASK_SETTINGS,
+			...(taskSettings ?? {}),
+			doneRange: normalizeDoneRange(taskSettings?.doneRange),
+			renderLimit: normalizeRenderLimit(taskSettings?.renderLimit),
+		},
+		taskPanelState: {
+			collapsed: {
+				...DEFAULT_TASK_PANEL_STATE.collapsed,
+				...(input.taskPanelState?.collapsed ?? {}),
 			},
 		},
 	};
@@ -173,4 +199,13 @@ export function countMixedWords(content: string): number {
 
 function isMarkdownFile(file: TAbstractFile): file is TFile {
 	return file instanceof TFile && file.extension === 'md';
+}
+
+function normalizeDoneRange(value: unknown): DoneRange {
+	return value === '7days' || value === 'all' ? value : 'today';
+}
+
+function normalizeRenderLimit(value: unknown): number {
+	if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_TASK_SETTINGS.renderLimit;
+	return Math.min(1000, Math.max(1, Math.round(value)));
 }

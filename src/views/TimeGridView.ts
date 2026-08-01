@@ -4,7 +4,10 @@ import { MonthHeatmap } from '../components/MonthHeatmap';
 import { DayGrid } from '../components/DayGrid';
 import { HourGrid } from '../components/HourGrid';
 import { DailyPieChart } from '../components/DailyPieChart';
+import { TaskPanel } from '../components/TaskPanel';
+import { TaskPanelState, TaskSettings } from '../types/task';
 import { openOrCreateDailyNoteForDate, openOrCreateTodayDailyNote } from '../utils/dailyNotes';
+import { TaskIndex } from '../utils/taskIndex';
 import { WritingStatsTracker } from '../utils/writingStats';
 
 export const TIME_GRID_VIEW = 'time-grid-view';
@@ -16,11 +19,27 @@ export class TimeGridView extends ItemView {
 	private dayGrid: DayGrid;
 	private hourGrid: HourGrid;
 	private dailyPieChart: DailyPieChart;
+	private taskPanel: TaskPanel;
+	private taskIndex: TaskIndex;
+	private getTaskSettings: () => TaskSettings;
+	private getTaskPanelState: () => TaskPanelState;
+	private saveTaskPanelState: (state: TaskPanelState) => Promise<void>;
 	private updateInterval: number;
 
-	constructor(leaf: WorkspaceLeaf, writingStats: WritingStatsTracker) {
+	constructor(
+		leaf: WorkspaceLeaf,
+		writingStats: WritingStatsTracker,
+		taskIndex: TaskIndex,
+		getTaskSettings: () => TaskSettings,
+		getTaskPanelState: () => TaskPanelState,
+		saveTaskPanelState: (state: TaskPanelState) => Promise<void>
+	) {
 		super(leaf);
 		this.writingStats = writingStats;
+		this.taskIndex = taskIndex;
+		this.getTaskSettings = getTaskSettings;
+		this.getTaskPanelState = getTaskPanelState;
+		this.saveTaskPanelState = saveTaskPanelState;
 	}
 
 	getViewType(): string {
@@ -55,6 +74,11 @@ export class TimeGridView extends ItemView {
 		this.dayGrid = new DayGrid(wrapper);
 		this.hourGrid = new HourGrid(wrapper);
 		this.dailyPieChart = new DailyPieChart(wrapper, this.app);
+		this.taskPanel = new TaskPanel(wrapper, this.app, this.taskIndex, {
+			getSettings: this.getTaskSettings,
+			getState: this.getTaskPanelState,
+			saveState: this.saveTaskPanelState,
+		});
 
 		// 每秒更新一次（节流到 1 秒，降低内存占用）
 		this.updateInterval = window.setInterval(() => {
@@ -69,6 +93,7 @@ export class TimeGridView extends ItemView {
 		if (this.updateInterval) {
 			clearInterval(this.updateInterval);
 		}
+		this.taskPanel?.destroy();
 	}
 
 	private updateAll(): void {
@@ -78,5 +103,6 @@ export class TimeGridView extends ItemView {
 		this.dayGrid.update(now);
 		this.hourGrid.update(now);
 		this.dailyPieChart.update(now);
+		this.taskIndex.refreshForDate(now);
 	}
 }
