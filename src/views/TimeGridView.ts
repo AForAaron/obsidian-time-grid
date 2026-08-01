@@ -1,4 +1,4 @@
-import { ItemView, setIcon, WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, setIcon, TFile, WorkspaceLeaf } from 'obsidian';
 import { TimeHeatmap } from '../components/TimeHeatmap';
 import { MonthHeatmap } from '../components/MonthHeatmap';
 import { DayGrid } from '../components/DayGrid';
@@ -10,6 +10,13 @@ import { openOrCreateDailyNoteForDate, openOrCreateTodayDailyNote } from '../uti
 import { TaskIndex } from '../utils/taskIndex';
 import { TaskWriter } from '../utils/taskWriter';
 import { WritingStatsTracker } from '../utils/writingStats';
+import { RoutineIndex } from '../utils/routineIndex';
+import { RoutineRepository } from '../utils/routineRepository';
+import { RoutineWriter } from '../utils/routineWriter';
+import { RoutineManagerModal } from '../components/RoutineManagerModal';
+import { RoutineMigrationModal } from '../components/RoutineMigrationModal';
+import { RoutineItemEditModal } from '../components/RoutineItemEditModal';
+import { RoutinePromoteModal } from '../components/RoutinePromoteModal';
 
 export const TIME_GRID_VIEW = 'time-grid-view';
 
@@ -23,6 +30,9 @@ export class TimeGridView extends ItemView {
 	private taskPanel: TaskPanel;
 	private taskIndex: TaskIndex;
 	private taskWriter: TaskWriter;
+	private routineRepository: RoutineRepository;
+	private routineIndex: RoutineIndex;
+	private routineWriter: RoutineWriter;
 	private getTaskSettings: () => TaskSettings;
 	private getTaskPanelState: () => TaskPanelState;
 	private saveTaskPanelState: (state: TaskPanelState) => Promise<void>;
@@ -39,6 +49,9 @@ export class TimeGridView extends ItemView {
 		writingStats: WritingStatsTracker,
 		taskIndex: TaskIndex,
 		taskWriter: TaskWriter,
+		routineRepository: RoutineRepository,
+		routineIndex: RoutineIndex,
+		routineWriter: RoutineWriter,
 		getTaskSettings: () => TaskSettings,
 		getTaskPanelState: () => TaskPanelState,
 		saveTaskPanelState: (state: TaskPanelState) => Promise<void>,
@@ -49,6 +62,9 @@ export class TimeGridView extends ItemView {
 		this.writingStats = writingStats;
 		this.taskIndex = taskIndex;
 		this.taskWriter = taskWriter;
+		this.routineRepository = routineRepository;
+		this.routineIndex = routineIndex;
+		this.routineWriter = routineWriter;
 		this.getTaskSettings = getTaskSettings;
 		this.getTaskPanelState = getTaskPanelState;
 		this.saveTaskPanelState = saveTaskPanelState;
@@ -99,10 +115,41 @@ export class TimeGridView extends ItemView {
 			getSettings: this.getTaskSettings,
 			getState: this.getTaskPanelState,
 			saveState: this.saveTaskPanelState,
+			routineIndex: this.routineIndex,
+			routineActions: {
+				createTodayNote: async () => {
+					await openOrCreateTodayDailyNote(this.app);
+					await this.routineIndex.rebuild();
+				},
+				openYesterday: () => this.openRoutineYesterday(),
+				openManager: () => new RoutineManagerModal(this.app, this.routineIndex, this.routineWriter).open(),
+				openMigration: () => new RoutineMigrationModal(this.app, this.routineRepository, this.routineWriter, () => void this.routineIndex.rebuild()).open(),
+				editFuture: (instance) => this.openFutureEditor(instance),
+				addTodayToFuture: (instance) => new RoutinePromoteModal(
+					this.app,
+					this.routineWriter,
+					instance,
+					this.routineIndex.getSnapshot().definition.groups,
+					() => void this.routineIndex.rebuild()
+				).open(),
+				skipToday: (instance) => this.routineWriter.skipToday(instance),
+			},
 			actions: {
-				toggleDone: (task) => this.taskWriter.toggleDone(task),
-				setStatus: (task, status) => this.taskWriter.setStatus(task, status),
-				updateTask: (task, patch) => this.taskWriter.updateTask(task, patch),
+				toggleDone: async (task) => {
+					const result = await this.taskWriter.toggleDone(task);
+					if (result.ok && task.routine) await this.routineIndex.rebuild();
+					return result;
+				},
+				setStatus: async (task, status) => {
+					const result = await this.taskWriter.setStatus(task, status);
+					if (result.ok && task.routine) await this.routineIndex.rebuild();
+					return result;
+				},
+				updateTask: async (task, patch) => {
+					const result = await this.taskWriter.updateTask(task, patch);
+					if (result.ok && task.routine) await this.routineIndex.rebuild();
+					return result;
+				},
 				postponeTask: (task, days) => this.taskWriter.postponeTask(task, days),
 				deleteTask: (task) => this.taskWriter.deleteTask(task),
 			},
@@ -130,6 +177,23 @@ export class TimeGridView extends ItemView {
 		const now = new Date();
 		if (this.activeMode === 'time') this.updateTime(now);
 		this.taskIndex.refreshForDate(now);
+		this.routineIndex.refreshForDate(now);
+	}
+
+	private async openRoutineYesterday(): Promise<void> {
+		const path = this.routineIndex.getSnapshot().yesterday.filePath;
+		const file = path ? this.app.vault.getAbstractFileByPath(path) : null;
+		if (!(file instanceof TFile)) return void new Notice('昨日未创建日记');
+		await this.app.workspace.getLeaf(false).openFile(file);
+	}
+
+	private openFutureEditor(instance: import('../types/routine').RoutineInstance): void {
+		if (!instance.itemId) return;
+		const groups = this.routineIndex.getSnapshot().definition.groups;
+		const group = groups.find((candidate) => candidate.id === instance.groupId);
+		const item = group?.items.find((candidate) => candidate.id === instance.itemId);
+		if (!group || !item) return void new Notice('找不到对应的未来流程定义，请重新扫描');
+		new RoutineItemEditModal(this.app, this.routineWriter, groups, group.id, item, () => void this.routineIndex.rebuild(), instance).open();
 	}
 
 	private updateTime(now: Date): void {

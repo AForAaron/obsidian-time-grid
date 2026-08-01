@@ -1,7 +1,6 @@
 import { App, MarkdownView, Notice, setIcon, TFile } from 'obsidian';
 import {
 	EditableTaskStatus,
-	RoutineGroupViewModel,
 	TaskPatch,
 	TaskPanelState,
 	TaskPriority,
@@ -11,6 +10,7 @@ import {
 	TGTask,
 	WriteResult,
 } from '../types/task';
+import { RoutineActions, RoutineGroupViewModel, RoutineInstance, RoutineSnapshot } from '../types/routine';
 import { TaskEditModal } from './TaskEditModal';
 import { TaskDeleteConfirmModal } from './TaskDeleteConfirmModal';
 import { TaskIndex } from '../utils/taskIndex';
@@ -26,6 +26,9 @@ import {
 	TaskPriorityFilter,
 } from '../utils/taskView';
 import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer, TaskMenuAction } from '../utils/taskUi';
+import { RoutineIndex } from '../utils/routineIndex';
+import { displayRoutineTitle } from '../utils/routineMarker';
+import { isRoutineReminderDue } from '../utils/routineReminder';
 
 type PersistedSection = 'unsorted' | 'goal' | 'future' | 'done';
 
@@ -33,7 +36,8 @@ interface TaskPanelOptions {
 	getSettings: () => TaskSettings;
 	getState: () => TaskPanelState;
 	saveState: (state: TaskPanelState) => Promise<void>;
-	getRoutineGroup?: () => RoutineGroupViewModel | undefined;
+	routineIndex?: RoutineIndex;
+	routineActions?: RoutineActions;
 	actions?: {
 		toggleDone: (task: TGTask) => Promise<WriteResult>;
 		setStatus: (task: TGTask, status: EditableTaskStatus) => Promise<WriteResult>;
@@ -75,13 +79,14 @@ export class TaskPanel {
 	private index: TaskIndex;
 	private options: TaskPanelOptions;
 	private unsubscribe: (() => void) | null = null;
+	private unsubscribeRoutine: (() => void) | null = null;
 	private expandedSections = new Set<TaskSection>();
 	private expandedTasks = new Set<string>();
 	private pendingStatuses = new Map<string, EditableTaskStatus>();
 	private pendingTasks = new Set<string>();
 	private filters: TaskFilterState = createEmptyTaskFilters();
 	private filterPanelOpen = false;
-	private routineExpanded = true;
+	private collapsedRoutineGroups = new Set<string>();
 	private previewEl: HTMLElement | null = null;
 	private previewTimer: number | null = null;
 	private previewCloseTimer: number | null = null;
@@ -118,6 +123,7 @@ export class TaskPanel {
 		this.index = index;
 		this.options = options;
 		this.unsubscribe = this.index.onChange(() => this.render());
+		this.unsubscribeRoutine = this.options.routineIndex?.onChange(() => this.render()) ?? null;
 		this.container.closest('.tg-container')?.addEventListener('scroll', this.handleScroll, { passive: true });
 		window.addEventListener('resize', this.handleResize, { passive: true });
 		window.addEventListener('keydown', this.handleKeydown);
@@ -129,6 +135,8 @@ export class TaskPanel {
 	destroy(): void {
 		this.unsubscribe?.();
 		this.unsubscribe = null;
+		this.unsubscribeRoutine?.();
+		this.unsubscribeRoutine = null;
 		this.container.closest('.tg-container')?.removeEventListener('scroll', this.handleScroll);
 		window.removeEventListener('resize', this.handleResize);
 		window.removeEventListener('keydown', this.handleKeydown);
@@ -154,26 +162,38 @@ export class TaskPanel {
 		if (!settings.enabled) return;
 
 		const snapshot = this.index.getSnapshot();
-		const allTasks = snapshot.tasks;
-		this.renderHeader(allTasks, snapshot.isIndexing);
-		if (snapshot.isIndexing && allTasks.length === 0) {
+		const routineSnapshot = this.options.routineIndex?.getSnapshot();
+		const routineInstances = routineSnapshot?.groups.flatMap((group) => group.items) ?? [];
+		const allTasks = snapshot.tasks.concat(routineInstances.map((instance) => instance.task));
+		this.renderHeader(allTasks, snapshot.isIndexing || Boolean(routineSnapshot?.isIndexing));
+		if ((snapshot.isIndexing || routineSnapshot?.isIndexing) && allTasks.length === 0) {
 			this.renderLoading();
 			this.restoreScroll(outerScroll, previousScrollTop);
 			return;
 		}
 
-		const displayBase = allTasks.filter((task) => task.section !== 'done')
-			.concat(filterTerminalTasks(allTasks.filter((task) => task.section === 'done'), settings.doneRange));
+		const ordinaryTasks = snapshot.tasks;
+		const displayBase = ordinaryTasks.filter((task) => task.section !== 'done')
+			.concat(filterTerminalTasks(ordinaryTasks.filter((task) => task.section === 'done'), settings.doneRange))
+			.concat(routineInstances.map((instance) => instance.task));
 		const filteredTasks = filterTasks(displayBase, this.filters);
 		const counts = countFilteredSections(displayBase, filteredTasks);
 		const filtering = hasActiveTaskFilters(this.filters);
 
-		if (allTasks.length === 0) this.renderEmpty('还没有任务', '在任意笔记里写 “- [ ] 内容” 即可被 Time Grid 汇总。', 'list-plus');
-		else if (filteredTasks.length === 0) this.renderEmpty('没有匹配的任务', '换个关键词，或清除筛选条件后再试。', 'search-x', true);
+		if (allTasks.length === 0 && !routineSnapshot) this.renderEmpty('还没有任务', '在任意笔记里写 “- [ ] 内容” 即可被 Time Grid 汇总。', 'list-plus');
+		else if (filteredTasks.length === 0 && filtering) this.renderEmpty('没有匹配的任务', '换个关键词，或清除筛选条件后再试。', 'search-x', true);
 
 		const totalOverRenderThreshold = displayBase.length > 200;
+		const filteredTaskIds = new Set(filteredTasks.map((task) => task.id));
 		for (const config of SECTION_CONFIG) {
-			const sectionTasks = sortTasks(config.section, filteredTasks.filter((task) => task.section === config.section));
+			const sectionTasks = sortTasks(config.section, filteredTasks.filter((task) => task.section === config.section && !task.routine));
+			const visibleRoutineGroups = config.section === 'today' && routineSnapshot
+				? routineSnapshot.groups.map((group) => ({ ...group, items: group.items.filter((item) => filteredTaskIds.has(item.task.id)) }))
+					.filter((group) => group.items.length > 0 || !hasActiveTaskFilters(this.filters))
+				: [];
+			if (config.section === 'done') {
+				sectionTasks.push(...filteredTasks.filter((task) => task.section === 'done' && Boolean(task.routine)));
+			}
 			this.renderSection(
 				config,
 				sectionTasks,
@@ -181,7 +201,9 @@ export class TaskPanel {
 				counts.total[config.section] ?? 0,
 				filtering,
 				totalOverRenderThreshold,
-				settings.renderLimit
+				settings.renderLimit,
+				routineSnapshot,
+				visibleRoutineGroups
 			);
 		}
 		this.restoreScroll(outerScroll, previousScrollTop);
@@ -379,7 +401,9 @@ export class TaskPanel {
 		totalCount: number,
 		filtering: boolean,
 		limitEnabled: boolean,
-		renderLimit: number
+		renderLimit: number,
+		routineSnapshot?: RoutineSnapshot,
+		routineGroups: RoutineGroupViewModel[] = []
 	): void {
 		const sectionEl = this.container.createDiv(`tg-task-section tg-task-section-${config.section}`);
 		const collapsed = this.isCollapsed(config.section);
@@ -404,11 +428,11 @@ export class TaskPanel {
 		}
 		if (config.section === 'overdue' || config.section === 'today') heading.setAttr('aria-disabled', 'true');
 		else heading.addEventListener('click', () => void this.toggleSection(config.section));
-		const routineGroup = config.section === 'today' ? this.options.getRoutineGroup?.() : undefined;
-		if (collapsed || (tasks.length === 0 && !getRoutineProgress(routineGroup))) return;
+		const hasRoutineArea = config.section === 'today' && Boolean(routineSnapshot);
+		if (collapsed || (tasks.length === 0 && routineGroups.length === 0 && !hasRoutineArea)) return;
 
 		const list = sectionEl.createDiv({ cls: 'tg-task-list', attr: { id: `tg-task-list-${config.section}` } });
-		if (config.section === 'today' && routineGroup) this.renderRoutineGroup(list, routineGroup);
+		if (config.section === 'today' && routineSnapshot) this.renderRoutineArea(list, routineSnapshot, routineGroups);
 		const shouldLimit = limitEnabled && !this.expandedSections.has(config.section) && tasks.length > renderLimit;
 		const visible = shouldLimit ? tasks.slice(0, renderLimit) : tasks;
 		if (config.section === 'future') this.renderFutureGroups(list, visible);
@@ -422,13 +446,80 @@ export class TaskPanel {
 		}
 	}
 
-	private renderRoutineGroup(parent: HTMLElement, group: RoutineGroupViewModel): void {
+	private renderRoutineArea(parent: HTMLElement, snapshot: RoutineSnapshot, visibleGroups: RoutineGroupViewModel[]): void {
+		if (snapshot.migrationRequired) {
+			const migration = parent.createDiv('tg-routine-message is-migration');
+			const icon = migration.createSpan('tg-routine-message-icon');
+			setIcon(icon, 'sparkles');
+			const copy = migration.createDiv('tg-routine-message-copy');
+			copy.createDiv({ cls: 'tg-routine-message-title', text: '启用每日流程' });
+			copy.createDiv({ text: '检测到现有日记模板，可先预览再安全导入流程项目。' });
+			const button = migration.createEl('button', { text: '查看迁移预览' });
+			button.addEventListener('click', () => this.options.routineActions?.openMigration());
+		}
+		if (!snapshot.todayNoteExists) {
+			const missing = parent.createDiv('tg-routine-message is-empty');
+			const icon = missing.createSpan('tg-routine-message-icon');
+			setIcon(icon, 'notebook-pen');
+			const copy = missing.createDiv('tg-routine-message-copy');
+			copy.createDiv({ cls: 'tg-routine-message-title', text: '创建今日日记后启用每日流程' });
+			copy.createDiv({ text: '创建后会按今天的计划生成独立实例。' });
+			const button = missing.createEl('button', { text: '创建今日日记' });
+			button.addEventListener('click', () => void this.options.routineActions?.createTodayNote());
+		}
+		const visibleDiagnostics = snapshot.diagnostics.filter((item) =>
+			item.code !== 'definition-missing' && !(snapshot.migrationRequired && item.code === 'definition-invalid'));
+		if (visibleDiagnostics.length > 0) {
+			const diagnostic = parent.createDiv('tg-routine-message is-diagnostic');
+			const icon = diagnostic.createSpan('tg-routine-message-icon');
+			setIcon(icon, 'triangle-alert');
+			const copy = diagnostic.createDiv('tg-routine-message-copy');
+			copy.createDiv({ cls: 'tg-routine-message-title', text: '每日流程需要检查' });
+			copy.createDiv({ text: visibleDiagnostics.map((item) => item.message).join('；') });
+		}
+		this.renderYesterdayReminder(parent, snapshot);
+		for (const group of visibleGroups) {
+			const original = snapshot.groups.find((candidate) => candidate.id === group.id) ?? group;
+			this.renderRoutineGroup(parent, original, group.items);
+		}
+		if (snapshot.definitionReady) {
+			const manage = parent.createEl('button', { cls: 'tg-routine-manage-button', text: '管理每日流程' });
+			const icon = manage.createSpan('tg-task-meta-icon');
+			setIcon(icon, 'settings-2');
+			manage.prepend(icon);
+			manage.addEventListener('click', () => this.options.routineActions?.openManager());
+		}
+	}
+
+	private renderYesterdayReminder(parent: HTMLElement, snapshot: RoutineSnapshot): void {
+		const reminder = parent.createDiv(`tg-routine-yesterday${snapshot.yesterday.missed.length ? ' has-missed' : ''}`);
+		const icon = reminder.createSpan('tg-routine-message-icon');
+		setIcon(icon, snapshot.yesterday.noteExists ? (snapshot.yesterday.missed.length ? 'circle-alert' : 'circle-check') : 'calendar-x');
+		const copy = reminder.createDiv('tg-routine-message-copy');
+		if (!snapshot.yesterday.noteExists) {
+			copy.createDiv({ cls: 'tg-routine-message-title', text: '昨日未创建日记' });
+			copy.createDiv({ text: snapshot.yesterday.date });
+			return;
+		}
+		if (snapshot.yesterday.missed.length === 0) {
+			copy.createDiv({ cls: 'tg-routine-message-title', text: '昨日流程已处理' });
+		} else {
+			copy.createDiv({ cls: 'tg-routine-message-title', text: `昨日漏做 ${snapshot.yesterday.missed.length} 项` });
+			copy.createDiv({ text: snapshot.yesterday.missed.map((item) => displayRoutineTitle(item.task.description)).join('、') });
+		}
+		const open = reminder.createEl('button', { text: '打开昨日记' });
+		open.addEventListener('click', () => void this.options.routineActions?.openYesterday());
+	}
+
+	private renderRoutineGroup(parent: HTMLElement, group: RoutineGroupViewModel, visibleItems = group.items): void {
 		const progress = getRoutineProgress(group);
 		if (!progress) return;
 		const wrapper = parent.createDiv('tg-routine-group');
-		const summary = wrapper.createEl('button', {
+		const header = wrapper.createDiv('tg-routine-header');
+		const collapsed = this.collapsedRoutineGroups.has(group.id);
+		const summary = header.createEl('button', {
 			cls: 'tg-routine-summary',
-			attr: { 'aria-expanded': String(this.routineExpanded), 'aria-controls': `tg-routine-items-${group.id}` },
+			attr: { 'aria-expanded': String(!collapsed), 'aria-controls': `tg-routine-items-${group.id}` },
 		});
 		const icon = summary.createSpan('tg-routine-icon');
 		setIcon(icon, 'refresh-cw');
@@ -437,19 +528,18 @@ export class TaskPanel {
 		copy.createSpan({ cls: 'tg-routine-subtitle', text: group.subtitle ?? '今天的固定例行事项' });
 		summary.createSpan({ cls: 'tg-routine-progress', text: `${progress.completed} / ${progress.total}` });
 		const chevron = summary.createSpan('tg-routine-chevron');
-		setIcon(chevron, this.routineExpanded ? 'chevron-down' : 'chevron-right');
+		setIcon(chevron, collapsed ? 'chevron-right' : 'chevron-down');
 		summary.addEventListener('click', () => {
-			this.routineExpanded = !this.routineExpanded;
+			if (collapsed) this.collapsedRoutineGroups.delete(group.id);
+			else this.collapsedRoutineGroups.add(group.id);
 			this.render();
 		});
-		if (!this.routineExpanded) return;
+		const manage = header.createEl('button', { cls: 'tg-routine-group-menu', attr: { 'aria-label': `管理组合：${group.title}`, title: '管理组合' } });
+		setIcon(manage, 'settings-2');
+		manage.addEventListener('click', () => this.options.routineActions?.openManager());
+		if (collapsed) return;
 		const items = wrapper.createDiv({ cls: 'tg-routine-items', attr: { id: `tg-routine-items-${group.id}` } });
-		for (const item of group.items) {
-			const row = items.createDiv(`tg-routine-item${item.done ? ' is-done' : ''}`);
-			const check = row.createSpan('tg-routine-check');
-			setIcon(check, item.done ? 'check' : 'minus');
-			row.createSpan({ cls: 'tg-routine-item-title', text: item.title });
-		}
+		for (const item of visibleItems) this.renderTaskRow(items, item.task);
 	}
 
 	private renderFutureGroups(parent: HTMLElement, tasks: TGTask[]): void {
@@ -470,7 +560,7 @@ export class TaskPanel {
 		const blockReason = getTaskWriteBlockReason(task);
 		const mutationPending = this.pendingTasks.has(task.id);
 		const expanded = this.expandedTasks.has(task.id);
-		const row = parent.createDiv(`tg-task-row tg-task-status-${displayStatus} tg-task-tone-${task.section}`);
+		const row = parent.createDiv(`tg-task-row tg-task-status-${displayStatus} tg-task-tone-${task.section}${task.routine ? ' is-routine' : ''}`);
 		row.setAttr('data-task-id', task.id);
 		if (blockReason) row.addClass('is-read-only');
 		if (optimisticStatus || mutationPending) row.addClass('is-pending');
@@ -491,7 +581,7 @@ export class TaskPanel {
 		const content = main.createDiv('tg-task-card-content');
 		const title = content.createEl('button', {
 			cls: 'tg-task-description',
-			text: task.description || task.raw.trim(),
+			text: taskTitle(task),
 			attr: { 'aria-expanded': String(expanded), title: '' },
 		});
 		title.addEventListener('click', (event) => {
@@ -521,12 +611,18 @@ export class TaskPanel {
 		}
 		const statusButton = meta.createEl('button', {
 			cls: `tg-task-status-badge is-${displayStatus}`,
-			text: statusLabel(displayStatus),
-			attr: { 'aria-label': `任务状态：${statusLabel(displayStatus)}，点击更改`, 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
+			text: statusLabel(displayStatus, Boolean(task.routine)),
+			attr: { 'aria-label': `任务状态：${statusLabel(displayStatus, Boolean(task.routine))}，点击更改`, 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
 		});
 		statusButton.disabled = Boolean(blockReason || mutationPending || !this.options.actions);
 		statusButton.addEventListener('click', (event) => this.openStatusMenu(event, statusButton, task));
 		if (task.priority) meta.createSpan({ cls: `tg-task-priority is-${task.priority}`, text: `${priorityGlyph(task.priority)} ${priorityLabel(task.priority)}` });
+		if (task.routine?.reminderTime) {
+			const instance = this.findRoutineInstance(task);
+			const due = instance ? isRoutineReminderDue(instance, new Date(), this.options.routineIndex?.getSnapshot().today ?? getTodayKey()) : false;
+			meta.createSpan({ cls: `tg-routine-reminder-time${due ? ' is-due' : ''}`, text: due ? `已到时间 · ${task.routine.reminderTime}` : task.routine.reminderTime });
+		}
+		if (task.routine?.todayOnly) meta.createSpan({ cls: 'tg-task-readonly-badge', text: '仅今天' });
 		if (this.options.getSettings().showFileName) meta.createSpan({ cls: 'tg-task-file', text: fileName(task.filePath), attr: { title: task.filePath } });
 		if (task.hasRecurrence) meta.createSpan({ cls: 'tg-task-readonly-badge', text: '循环 · 只读' });
 		else if (blockReason) meta.createSpan({ cls: 'tg-task-readonly-badge', text: '只读' });
@@ -537,14 +633,14 @@ export class TaskPanel {
 
 		if (!blockReason && this.options.actions) {
 			const hoverActions = row.createDiv('tg-task-hover-actions');
-			this.createIconAction(hoverActions, 'pencil', '编辑任务', () => this.openEditor(task));
-			if (task.due) this.createIconAction(hoverActions, 'calendar-plus', '顺延一天；按住 Shift 顺延一周', (event) =>
+			this.createIconAction(hoverActions, 'pencil', task.routine ? '编辑今天' : '编辑任务', () => this.openEditor(task));
+			if (!task.routine && task.due) this.createIconAction(hoverActions, 'calendar-plus', '顺延一天；按住 Shift 顺延一周', (event) =>
 				this.runMutation(task, () => this.options.actions!.postponeTask(task, event.shiftKey ? 7 : 1)));
 		}
 
 		if (expanded) {
 			const details = row.createDiv('tg-task-inline-expanded');
-			details.createDiv({ cls: 'tg-task-inline-title', text: task.description || task.raw.trim() });
+			details.createDiv({ cls: 'tg-task-inline-title', text: taskTitle(task) });
 			details.createDiv({ cls: 'tg-task-inline-source', text: `${task.filePath} · 第 ${task.line + 1} 行` });
 			if (blockReason) details.createDiv({ cls: 'tg-task-inline-diagnostic', text: blockReason });
 		}
@@ -562,7 +658,7 @@ export class TaskPanel {
 			});
 			const icon = item.createSpan('tg-task-menu-icon');
 			setIcon(icon, option.icon);
-			item.createSpan({ cls: 'tg-task-menu-label', text: option.label });
+			item.createSpan({ cls: 'tg-task-menu-label', text: task.routine && option.value === 'cancelled' ? '跳过今天' : option.label });
 			const check = item.createSpan('tg-task-menu-check');
 			if (selected) setIcon(check, 'check');
 			item.addEventListener('click', () => {
@@ -576,6 +672,10 @@ export class TaskPanel {
 
 	private openMoreMenu(event: MouseEvent, anchor: HTMLElement, task: TGTask, blockReason: string | null): void {
 		event.stopPropagation();
+		if (task.routine) {
+			this.openRoutineMoreMenu(anchor, task, blockReason);
+			return;
+		}
 		const writable = Boolean(!blockReason && this.options.actions);
 		const actions = getTaskMenuActions(task, writable);
 		const menu = document.body.createDiv({ cls: 'tg-task-menu tg-task-layer', attr: { role: 'menu', 'aria-label': '任务操作' } });
@@ -594,6 +694,34 @@ export class TaskPanel {
 			item.addEventListener('click', () => {
 				this.removeLayer();
 				this.runMenuAction(action, task, blockReason);
+			});
+		}
+		this.setLayer(menu, anchor, 'menu', 'bottom');
+		this.enableMenuKeyboard(menu);
+	}
+
+	private openRoutineMoreMenu(anchor: HTMLElement, task: TGTask, blockReason: string | null): void {
+		const instance = this.findRoutineInstance(task);
+		const menu = document.body.createDiv({ cls: 'tg-task-menu tg-task-layer', attr: { role: 'menu', 'aria-label': '每日流程操作' } });
+		const actions: Array<{ label: string; icon: string; danger?: boolean; run: () => void }> = [];
+		if (!blockReason && this.options.actions) {
+			actions.push({ label: '编辑今天', icon: 'pencil', run: () => this.openEditor(task) });
+			if (instance?.itemId) actions.push({ label: '修改以后每天', icon: 'calendar-cog', run: () => this.options.routineActions?.editFuture(instance) });
+			else if (instance) actions.push({ label: '加入以后每天', icon: 'calendar-plus', run: () => this.options.routineActions?.addTodayToFuture(instance) });
+			if (instance && task.status !== 'cancelled' && task.status !== 'done') {
+				actions.push({ label: '跳过今天', icon: 'circle-slash-2', danger: true, run: () => void this.options.routineActions?.skipToday(instance) });
+			}
+		}
+		if (blockReason) actions.push({ label: '查看只读原因', icon: 'info', run: () => new Notice(blockReason) });
+		actions.push({ label: '打开今日日记', icon: 'file-text', run: () => void this.openSource(task) });
+		for (const action of actions) {
+			const item = menu.createEl('button', { cls: `tg-task-menu-item${action.danger ? ' is-danger' : ''}`, attr: { role: 'menuitem', type: 'button' } });
+			const icon = item.createSpan('tg-task-menu-icon');
+			setIcon(icon, action.icon);
+			item.createSpan({ cls: 'tg-task-menu-label', text: action.label });
+			item.addEventListener('click', () => {
+				this.removeLayer();
+				action.run();
 			});
 		}
 		this.setLayer(menu, anchor, 'menu', 'bottom');
@@ -701,9 +829,9 @@ export class TaskPanel {
 		this.closePreview();
 		this.previewAnchor = anchor;
 		const preview = document.body.createDiv({ cls: `tg-task-preview tg-task-tone-${task.section}`, attr: { role: 'tooltip' } });
-		preview.createDiv({ cls: 'tg-task-preview-title', text: task.description || task.raw.trim() });
+		preview.createDiv({ cls: 'tg-task-preview-title', text: taskTitle(task) });
 		const meta = preview.createDiv('tg-task-preview-meta');
-		meta.createSpan({ cls: `tg-task-status-badge is-${task.status}`, text: statusLabel(task.status) });
+		meta.createSpan({ cls: `tg-task-status-badge is-${task.status}`, text: statusLabel(task.status, Boolean(task.routine)) });
 		if (task.due) meta.createSpan({ text: `到期 ${task.due}` });
 		if (task.priority) meta.createSpan({ text: `${priorityGlyph(task.priority)} ${priorityLabel(task.priority)}优先级` });
 		const source = preview.createDiv('tg-task-preview-source');
@@ -784,6 +912,13 @@ export class TaskPanel {
 			getSettings: this.options.getSettings,
 			save: (patch) => this.options.actions!.updateTask(task, patch),
 			deleteTask: () => this.runMutation(task, () => this.options.actions!.deleteTask(task)),
+			skipRoutine: task.routine ? () => {
+				const instance = this.findRoutineInstance(task);
+				if (instance && this.options.routineActions) {
+					return this.runMutation(task, () => this.options.routineActions!.skipToday(instance));
+				}
+				return this.runMutation(task, () => this.options.actions!.setStatus(task, 'cancelled'));
+			} : undefined,
 			openSource: () => this.openSource(task),
 		}).open();
 	}
@@ -829,6 +964,12 @@ export class TaskPanel {
 
 	private activeFilterCount(): number {
 		return this.filters.statuses.size + this.filters.priorities.size + this.filters.sources.size;
+	}
+
+	private findRoutineInstance(task: TGTask): RoutineInstance | undefined {
+		return this.options.routineIndex?.getSnapshot().groups
+			.flatMap((group) => group.items)
+			.find((instance) => instance.task.id === task.id);
 	}
 
 	private async openSource(task: TGTask): Promise<void> {
@@ -883,7 +1024,13 @@ function checkboxIcon(status: TaskStatusKind): string {
 	return 'square';
 }
 
-function statusLabel(status: TaskStatusKind): string {
+
+function taskTitle(task: TGTask): string {
+	return task.routine ? displayRoutineTitle(task.description || task.raw.trim()) : (task.description || task.raw.trim());
+}
+
+function statusLabel(status: TaskStatusKind, routine = false): string {
+	if (routine && status === 'cancelled') return '已跳过';
 	return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? '未知';
 }
 

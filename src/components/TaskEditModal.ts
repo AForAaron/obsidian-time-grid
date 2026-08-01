@@ -8,6 +8,7 @@ interface TaskEditModalOptions {
 	getSettings: () => TaskSettings;
 	save: (patch: TaskPatch) => Promise<WriteResult>;
 	deleteTask: () => Promise<WriteResult>;
+	skipRoutine?: () => Promise<WriteResult>;
 	openSource: () => Promise<void>;
 }
 
@@ -27,6 +28,7 @@ export class TaskEditModal extends Modal {
 	private dueInput: HTMLInputElement | null = null;
 	private priorityInput: HTMLSelectElement | null = null;
 	private goalInput: HTMLInputElement | null = null;
+	private reminderInput: HTMLInputElement | null = null;
 	private errorEl: HTMLElement | null = null;
 	private saveButton: HTMLButtonElement | null = null;
 
@@ -38,7 +40,7 @@ export class TaskEditModal extends Modal {
 
 	onOpen(): void {
 		this.modalEl.addClass('tg-task-edit-modal');
-		this.titleEl.setText('编辑任务');
+		this.titleEl.setText(this.task.routine ? '编辑今天的流程' : '编辑任务');
 		const blocked = getTaskWriteBlockReason(this.task);
 		if (blocked) this.renderReadOnly(blocked);
 		else this.renderForm();
@@ -68,36 +70,48 @@ export class TaskEditModal extends Modal {
 		});
 		this.descriptionInput.value = this.task.description;
 
-		const dueField = this.createField(form, '到期日');
-		this.dueInput = dueField.createEl('input', { type: 'date', attr: { 'aria-label': '任务到期日' } });
-		this.dueInput.value = this.task.due ?? '';
-		const quickDates = dueField.createDiv('tg-task-modal-quick-dates');
-		for (const [label, days] of [['今天', 0], ['明天', 1], ['下周', 7]] as Array<[string, number]>) {
-			const button = quickDates.createEl('button', { cls: 'tg-task-modal-button is-quiet', text: label, attr: { type: 'button' } });
-			button.addEventListener('click', () => {
-				if (this.dueInput) this.dueInput.value = dateAfter(days);
-			});
+		if (!this.task.routine) {
+			const dueField = this.createField(form, '到期日');
+			this.dueInput = dueField.createEl('input', { type: 'date', attr: { 'aria-label': '任务到期日' } });
+			this.dueInput.value = this.task.due ?? '';
+			const quickDates = dueField.createDiv('tg-task-modal-quick-dates');
+			for (const [label, days] of [['今天', 0], ['明天', 1], ['下周', 7]] as Array<[string, number]>) {
+				const button = quickDates.createEl('button', { cls: 'tg-task-modal-button is-quiet', text: label, attr: { type: 'button' } });
+				button.addEventListener('click', () => {
+					if (this.dueInput) this.dueInput.value = dateAfter(days);
+				});
+			}
+			const clearDate = quickDates.createEl('button', { cls: 'tg-task-modal-button is-quiet', text: '清除', attr: { type: 'button' } });
+			clearDate.addEventListener('click', () => { if (this.dueInput) this.dueInput.value = ''; });
 		}
-		const clearDate = quickDates.createEl('button', { cls: 'tg-task-modal-button is-quiet', text: '清除', attr: { type: 'button' } });
-		clearDate.addEventListener('click', () => { if (this.dueInput) this.dueInput.value = ''; });
 
 		const priorityField = this.createField(form, '优先级');
 		this.priorityInput = priorityField.createEl('select', { attr: { 'aria-label': '任务优先级' } });
 		for (const option of PRIORITIES) this.priorityInput.createEl('option', { value: option.value, text: option.label });
 		this.priorityInput.value = this.task.priority ?? '';
 
-		const goalField = this.createField(form, '长期任务', 'tg-task-modal-switch-field');
-		const goalControl = goalField.createEl('label', { cls: 'tg-task-modal-switch' });
-		this.goalInput = goalControl.createEl('input', { type: 'checkbox', attr: { 'aria-label': '设为长期任务' } });
-		this.goalInput.checked = hasGoalTag(this.task, this.options.getSettings().goalTag);
-		goalControl.createSpan({ text: this.options.getSettings().goalTag });
+		if (this.task.routine) {
+			const reminderField = this.createField(form, '今天提醒时间');
+			this.reminderInput = reminderField.createEl('input', { type: 'time', attr: { 'aria-label': '今天提醒时间' } });
+			this.reminderInput.value = this.task.routine.reminderTime ?? '';
+		} else {
+			const goalField = this.createField(form, '长期任务', 'tg-task-modal-switch-field');
+			const goalControl = goalField.createEl('label', { cls: 'tg-task-modal-switch' });
+			this.goalInput = goalControl.createEl('input', { type: 'checkbox', attr: { 'aria-label': '设为长期任务' } });
+			this.goalInput.checked = hasGoalTag(this.task, this.options.getSettings().goalTag);
+			goalControl.createSpan({ text: this.options.getSettings().goalTag });
+		}
 
 		this.renderSourceInfo(form);
 		this.errorEl = form.createDiv({ cls: 'tg-task-modal-error is-hidden', attr: { role: 'alert' } });
 
 		const footer = form.createDiv('tg-task-modal-footer');
-		const deleteButton = footer.createEl('button', { cls: 'tg-task-modal-button is-danger', text: '删除', attr: { type: 'button' } });
-		deleteButton.addEventListener('click', () => this.openDeleteConfirmation());
+		const deleteButton = footer.createEl('button', {
+			cls: 'tg-task-modal-button is-danger',
+			text: this.task.routine ? '跳过今天' : '删除',
+			attr: { type: 'button' },
+		});
+		deleteButton.addEventListener('click', () => this.task.routine ? void this.skipRoutine() : this.openDeleteConfirmation());
 		const source = footer.createEl('button', { cls: 'tg-task-modal-button', text: '打开源文件', attr: { type: 'button' } });
 		source.addEventListener('click', () => void this.openSourceAndClose());
 		const spacer = footer.createDiv('tg-task-modal-footer-spacer');
@@ -129,7 +143,8 @@ export class TaskEditModal extends Modal {
 	}
 
 	private async save(): Promise<void> {
-		if (!this.descriptionInput || !this.dueInput || !this.priorityInput || !this.goalInput || !this.saveButton) return;
+		if (!this.descriptionInput || !this.priorityInput || !this.saveButton) return;
+		if (!this.task.routine && (!this.dueInput || !this.goalInput)) return;
 		const description = this.descriptionInput.value.trim();
 		if (!description) {
 			this.showError('任务描述不能为空');
@@ -139,11 +154,15 @@ export class TaskEditModal extends Modal {
 		this.saveButton.disabled = true;
 		this.saveButton.setText('保存中...');
 		this.hideError();
-		const result = await this.options.save({
+		const result = await this.options.save(this.task.routine ? {
 			description,
-			due: this.dueInput.value || null,
 			priority: (this.priorityInput.value || null) as TaskPriority | null,
-			goal: this.goalInput.checked,
+			routineReminderTime: this.reminderInput?.value || null,
+		} : {
+			description,
+			due: this.dueInput!.value || null,
+			priority: (this.priorityInput.value || null) as TaskPriority | null,
+			goal: this.goalInput!.checked,
 		});
 		if (result.ok) {
 			this.close();
@@ -179,6 +198,13 @@ export class TaskEditModal extends Modal {
 			confirm: this.options.deleteTask,
 			openSource: this.options.openSource,
 		}).open();
+	}
+
+	private async skipRoutine(): Promise<void> {
+		if (!this.options.skipRoutine) return;
+		const result = await this.options.skipRoutine();
+		if (result.ok) this.close();
+		else this.showError(result.message);
 	}
 }
 
