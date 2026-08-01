@@ -49,7 +49,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 
 ## 当前进度
 
-截至 2026-06-26，项目处于可构建、可安装到 Obsidian vault 使用的阶段。当前重点进度记录如下：
+截至 2026-08-01，项目处于可构建、可安装到 Obsidian vault 使用的阶段。当前重点进度记录如下：
 
 - 基础插件骨架已完成：插件清单、TypeScript 入口、esbuild 构建、安装脚本和右侧面板注册流程已具备。
 - 核心时间可视化已完成：已包含近 3 个月、近 6 个月、近 1 年活动热力图、本月日期网格、24 小时网格和 60 分钟网格。
@@ -57,8 +57,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 今日计时分布已完成新版本：圆环图、中心总时长、空状态、格式异常状态、进行中状态、任务配色、Top 5 + 其他合并和图例悬停联动已实现。
 - 计时统计边界已修正：`simple-time-tracker` 时长会按当前日期边界裁剪，避免跨日记录影响单日统计。
 - 写作增量统计已具备：插件启用后为全库 Markdown 建立字数基线，并按日期记录新增字数。
-- 最新构建/安装状态：上一轮功能改动已通过 TypeScript 检查和生产打包，并同步到两个 Obsidian vault 的 `time-grid` 插件目录。
-- 当前没有单独测试框架；现阶段以 `npm run build`、生产打包和 Obsidian 内手动检查作为主要验证方式。
+- 最新构建/安装状态：任务模块 Phase 1–4 已通过 28 项自动测试、生产打包和临时 Git vault 写入验收；构建产物已同步到两个真实 vault，安装文件哈希与仓库产物一致。
 - 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433。
 - 任务模块 Phase 2 已完成：四态菜单、完成/重新打开快捷按钮、终态日期、严格唯一定位、失败重扫和写作统计抑制已接入；异常、未知状态、循环和重复任务保持只读或拒写。
 - 任务模块 Phase 3 已完成：支持编辑描述、到期日、优先级和长期标签；失败时弹窗保持打开并提供可复制错误；只读任务只显示诊断和源文件入口。
@@ -161,3 +160,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/components/TaskDeleteConfirmModal.ts`、`src/components/TaskEditModal.ts`、`src/components/TaskPanel.ts`、`src/utils/taskWriter.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`
 - 验证方式：`npm test` 28 项通过；`npm run build` 通过；专用临时 Git vault 验证顺延、二次确认删除、快速分类、相邻行保留，以及编辑器修改 Whiskey 与 Time Grid 顺延 Tango 的同文件并发写入，两份改动均保留。
 - 后续注意事项：最终仅向两个真实 vault 安装构建产物并做非破坏性冒烟检查；不得在真实 vault 触发任何任务写入。
+
+### 2026-08-01（任务模块最终验收）
+
+- 修改等级：L0 文档或注释
+- 变更摘要：完成 Phase 1–4 总验收，核对正式规格副本一致性、最低 Obsidian 版本、阶段提交链、双 vault 安装哈希和真实界面加载结果。
+- 涉及文件：`PROJECT_CONTEXT.md`
+- 验证方式：`npm test` 28 项通过；`npm run build`、`git diff --check` 通过；正式规格两份 SHA-256 一致；Aaron_Ob 加载 627 条任务（活跃 454），第二真实 vault 加载 0 条并显示正确空状态；两处均未触发任务写入。
+- 后续注意事项：分支 `codex/task-integration` 推送后由用户审阅并合并到 `main`；本轮不包含面板内新建任务与循环任务修改。
