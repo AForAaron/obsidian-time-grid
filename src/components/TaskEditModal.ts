@@ -53,9 +53,9 @@ export class TaskEditModal extends Modal {
 		this.contentEl.createEl('pre', { cls: 'tg-task-modal-raw', text: this.task.raw });
 		this.renderSourceInfo();
 		const footer = this.contentEl.createDiv('tg-task-modal-footer');
-		const source = footer.createEl('button', { cls: 'mod-cta', text: '打开源文件' });
+		const source = footer.createEl('button', { cls: 'tg-task-modal-button is-primary', text: '打开源文件' });
 		source.addEventListener('click', () => void this.openSourceAndClose());
-		const close = footer.createEl('button', { text: '关闭' });
+		const close = footer.createEl('button', { cls: 'tg-task-modal-button', text: '关闭' });
 		close.addEventListener('click', () => this.close());
 	}
 
@@ -73,12 +73,12 @@ export class TaskEditModal extends Modal {
 		this.dueInput.value = this.task.due ?? '';
 		const quickDates = dueField.createDiv('tg-task-modal-quick-dates');
 		for (const [label, days] of [['今天', 0], ['明天', 1], ['下周', 7]] as Array<[string, number]>) {
-			const button = quickDates.createEl('button', { text: label, attr: { type: 'button' } });
+			const button = quickDates.createEl('button', { cls: 'tg-task-modal-button is-quiet', text: label, attr: { type: 'button' } });
 			button.addEventListener('click', () => {
 				if (this.dueInput) this.dueInput.value = dateAfter(days);
 			});
 		}
-		const clearDate = quickDates.createEl('button', { text: '清除', attr: { type: 'button' } });
+		const clearDate = quickDates.createEl('button', { cls: 'tg-task-modal-button is-quiet', text: '清除', attr: { type: 'button' } });
 		clearDate.addEventListener('click', () => { if (this.dueInput) this.dueInput.value = ''; });
 
 		const priorityField = this.createField(form, '优先级');
@@ -96,14 +96,14 @@ export class TaskEditModal extends Modal {
 		this.errorEl = form.createDiv({ cls: 'tg-task-modal-error is-hidden', attr: { role: 'alert' } });
 
 		const footer = form.createDiv('tg-task-modal-footer');
-		const deleteButton = footer.createEl('button', { cls: 'mod-warning', text: '删除', attr: { type: 'button' } });
+		const deleteButton = footer.createEl('button', { cls: 'tg-task-modal-button is-danger', text: '删除', attr: { type: 'button' } });
 		deleteButton.addEventListener('click', () => this.openDeleteConfirmation());
-		const source = footer.createEl('button', { text: '打开源文件', attr: { type: 'button' } });
+		const source = footer.createEl('button', { cls: 'tg-task-modal-button', text: '打开源文件', attr: { type: 'button' } });
 		source.addEventListener('click', () => void this.openSourceAndClose());
 		const spacer = footer.createDiv('tg-task-modal-footer-spacer');
-		const cancel = footer.createEl('button', { text: '取消', attr: { type: 'button' } });
+		const cancel = footer.createEl('button', { cls: 'tg-task-modal-button', text: '取消', attr: { type: 'button' } });
 		cancel.addEventListener('click', () => this.close());
-		this.saveButton = footer.createEl('button', { cls: 'mod-cta', text: '保存', attr: { type: 'submit' } });
+		this.saveButton = footer.createEl('button', { cls: 'tg-task-modal-button is-primary', text: '保存', attr: { type: 'submit' } });
 		form.addEventListener('submit', (event) => {
 			event.preventDefault();
 			void this.save();

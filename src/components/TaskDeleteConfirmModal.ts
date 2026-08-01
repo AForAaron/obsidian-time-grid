@@ -33,12 +33,12 @@ export class TaskDeleteConfirmModal extends Modal {
 		this.errorEl = this.contentEl.createDiv({ cls: 'tg-task-modal-error is-hidden', attr: { role: 'alert' } });
 
 		const footer = this.contentEl.createDiv('tg-task-modal-footer');
-		const openSource = footer.createEl('button', { text: '打开源文件' });
+		const openSource = footer.createEl('button', { cls: 'tg-task-modal-button', text: '打开源文件' });
 		openSource.addEventListener('click', () => void this.openSourceAndClose());
 		footer.createDiv('tg-task-modal-footer-spacer');
-		const cancel = footer.createEl('button', { text: '取消' });
+		const cancel = footer.createEl('button', { cls: 'tg-task-modal-button', text: '取消' });
 		cancel.addEventListener('click', () => this.close());
-		this.deleteButton = footer.createEl('button', { cls: 'mod-warning', text: '确认删除' });
+		this.deleteButton = footer.createEl('button', { cls: 'tg-task-modal-button is-danger', text: '确认删除' });
 		this.deleteButton.addEventListener('click', () => void this.confirmDelete());
 	}
 

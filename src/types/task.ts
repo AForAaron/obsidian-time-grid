@@ -95,6 +95,19 @@ export interface TaskPanelState {
 	collapsed: Partial<Record<TaskSection, boolean>>;
 }
 
+export interface RoutineItemViewModel {
+	id: string;
+	title: string;
+	done: boolean;
+}
+
+export interface RoutineGroupViewModel {
+	id: string;
+	title: string;
+	subtitle?: string;
+	items: RoutineItemViewModel[];
+}
+
 export type TimeGridMode = 'time' | 'tasks';
 
 export interface TimeGridUiState {

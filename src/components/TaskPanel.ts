@@ -1,6 +1,7 @@
-import { App, MarkdownView, Menu, setIcon, TFile } from 'obsidian';
+import { App, MarkdownView, Notice, setIcon, TFile } from 'obsidian';
 import {
 	EditableTaskStatus,
+	RoutineGroupViewModel,
 	TaskPatch,
 	TaskPanelState,
 	TaskPriority,
@@ -24,6 +25,7 @@ import {
 	TaskFilterState,
 	TaskPriorityFilter,
 } from '../utils/taskView';
+import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer, TaskMenuAction } from '../utils/taskUi';
 
 type PersistedSection = 'unsorted' | 'goal' | 'future' | 'done';
 
@@ -31,6 +33,7 @@ interface TaskPanelOptions {
 	getSettings: () => TaskSettings;
 	getState: () => TaskPanelState;
 	saveState: (state: TaskPanelState) => Promise<void>;
+	getRoutineGroup?: () => RoutineGroupViewModel | undefined;
 	actions?: {
 		toggleDone: (task: TGTask) => Promise<WriteResult>;
 		setStatus: (task: TGTask, status: EditableTaskStatus) => Promise<WriteResult>;
@@ -78,26 +81,35 @@ export class TaskPanel {
 	private pendingTasks = new Set<string>();
 	private filters: TaskFilterState = createEmptyTaskFilters();
 	private filterPanelOpen = false;
+	private routineExpanded = true;
 	private previewEl: HTMLElement | null = null;
 	private previewTimer: number | null = null;
 	private previewCloseTimer: number | null = null;
 	private previewAnchor: HTMLElement | null = null;
-	private readonly handleScroll = () => this.closePreview();
-	private readonly handleResize = () => this.closePreview();
+	private layerEl: HTMLElement | null = null;
+	private layerAnchor: HTMLElement | null = null;
+	private layerKind: 'filter' | 'menu' | null = null;
+	private readonly handleScroll = () => {
+		this.closePreview();
+		this.dismissLayer(false);
+	};
+	private readonly handleResize = () => {
+		this.closePreview();
+		this.dismissLayer(false);
+	};
 	private readonly handleKeydown = (event: KeyboardEvent) => {
 		if (event.key !== 'Escape') return;
 		this.closePreview();
-		if (this.filterPanelOpen) {
-			this.filterPanelOpen = false;
-			this.render();
-		}
+		this.dismissLayer(true);
 	};
-	private readonly handleBlur = () => this.closePreview();
+	private readonly handleBlur = () => {
+		this.closePreview();
+		this.dismissLayer(false);
+	};
 	private readonly handleDocumentPointerDown = (event: PointerEvent) => {
-		if (!this.filterPanelOpen || !(event.target instanceof Element)) return;
-		if (event.target.closest('.tg-task-filter-panel, .tg-task-filter-button')) return;
-		this.filterPanelOpen = false;
-		this.render();
+		if (!this.layerEl || !(event.target instanceof Element)) return;
+		if (this.layerEl.contains(event.target) || this.layerAnchor?.contains(event.target)) return;
+		this.dismissLayer(false);
 	};
 
 	constructor(parent: HTMLElement, app: App, index: TaskIndex, options: TaskPanelOptions) {
@@ -123,11 +135,13 @@ export class TaskPanel {
 		window.removeEventListener('blur', this.handleBlur);
 		document.removeEventListener('pointerdown', this.handleDocumentPointerDown);
 		this.closePreview();
+		this.removeLayer();
 		this.container.remove();
 	}
 
 	render(): void {
 		this.closePreview();
+		this.removeLayer();
 		const outerScroll = this.container.closest('.tg-container') as HTMLElement | null;
 		const previousScrollTop = outerScroll?.scrollTop ?? 0;
 		const searchFocused = document.activeElement?.classList.contains('tg-task-search-input') ?? false;
@@ -237,10 +251,7 @@ export class TaskPanel {
 		}
 
 		const filterButtons = controls.createDiv('tg-task-filter-buttons');
-		this.createFilterButton(filterButtons, 'sliders-horizontal', '筛选', this.activeFilterCount(), 'tg-task-filter-compact');
-		this.createFilterButton(filterButtons, 'circle-dot', '状态', this.filters.statuses.size, 'tg-task-filter-category');
-		this.createFilterButton(filterButtons, 'signal', '优先级', this.filters.priorities.size, 'tg-task-filter-category');
-		this.createFilterButton(filterButtons, 'file-text', '来源', this.filters.sources.size, 'tg-task-filter-category');
+		const filterButton = this.createFilterButton(filterButtons, 'sliders-horizontal', '筛选', this.activeFilterCount());
 		if (hasActiveTaskFilters(this.filters)) {
 			const reset = filterButtons.createEl('button', { cls: 'tg-task-filter-reset', text: '清除', attr: { 'aria-label': '清除全部搜索和筛选' } });
 			reset.addEventListener('click', () => {
@@ -248,12 +259,12 @@ export class TaskPanel {
 				this.render();
 			});
 		}
-		if (this.filterPanelOpen) this.renderFilterPanel(parent, tasks);
+		if (this.filterPanelOpen) this.renderFilterPanel(filterButton, tasks);
 	}
 
-	private createFilterButton(parent: HTMLElement, iconName: string, label: string, count: number, extraClass: string): void {
+	private createFilterButton(parent: HTMLElement, iconName: string, label: string, count: number): HTMLButtonElement {
 		const button = parent.createEl('button', {
-			cls: `tg-task-filter-button ${extraClass}${count ? ' is-active' : ''}`,
+			cls: `tg-task-filter-button${count ? ' is-active' : ''}`,
 			attr: { 'aria-expanded': String(this.filterPanelOpen), 'aria-label': `${label}筛选${count ? `，已选 ${count} 项` : ''}` },
 		});
 		const icon = button.createSpan('tg-task-filter-icon');
@@ -264,10 +275,11 @@ export class TaskPanel {
 			this.filterPanelOpen = !this.filterPanelOpen;
 			this.render();
 		});
+		return button;
 	}
 
-	private renderFilterPanel(parent: HTMLElement, tasks: TGTask[]): void {
-		const panel = parent.createDiv({ cls: 'tg-task-filter-panel', attr: { role: 'group', 'aria-label': '任务筛选' } });
+	private renderFilterPanel(anchor: HTMLElement, tasks: TGTask[]): void {
+		const panel = document.body.createDiv({ cls: 'tg-task-filter-panel tg-task-layer', attr: { role: 'dialog', 'aria-label': '任务筛选' } });
 		this.renderFilterGroup(panel, '状态', STATUS_OPTIONS.map((option) => ({
 			value: option.value,
 			label: option.label,
@@ -300,11 +312,20 @@ export class TaskPanel {
 		}
 		const footer = panel.createDiv('tg-task-filter-footer');
 		footer.createSpan({ text: this.activeFilterCount() ? `已选 ${this.activeFilterCount()} 项` : '未选择筛选条件' });
+		if (hasActiveTaskFilters(this.filters)) {
+			const clear = footer.createEl('button', { text: '清除全部' });
+			clear.addEventListener('click', () => {
+				this.filters = createEmptyTaskFilters();
+				this.filterPanelOpen = true;
+				this.render();
+			});
+		}
 		const done = footer.createEl('button', { text: '完成' });
 		done.addEventListener('click', () => {
 			this.filterPanelOpen = false;
 			this.render();
 		});
+		this.setLayer(panel, anchor, 'filter', 'bottom');
 	}
 
 	private renderFilterGroup(parent: HTMLElement, title: string, options: Array<{ value: string; label: string; selected: boolean; toggle: () => void }>): void {
@@ -383,9 +404,11 @@ export class TaskPanel {
 		}
 		if (config.section === 'overdue' || config.section === 'today') heading.setAttr('aria-disabled', 'true');
 		else heading.addEventListener('click', () => void this.toggleSection(config.section));
-		if (collapsed || tasks.length === 0) return;
+		const routineGroup = config.section === 'today' ? this.options.getRoutineGroup?.() : undefined;
+		if (collapsed || (tasks.length === 0 && !getRoutineProgress(routineGroup))) return;
 
 		const list = sectionEl.createDiv({ cls: 'tg-task-list', attr: { id: `tg-task-list-${config.section}` } });
+		if (config.section === 'today' && routineGroup) this.renderRoutineGroup(list, routineGroup);
 		const shouldLimit = limitEnabled && !this.expandedSections.has(config.section) && tasks.length > renderLimit;
 		const visible = shouldLimit ? tasks.slice(0, renderLimit) : tasks;
 		if (config.section === 'future') this.renderFutureGroups(list, visible);
@@ -396,6 +419,36 @@ export class TaskPanel {
 				this.expandedSections.add(config.section);
 				this.render();
 			});
+		}
+	}
+
+	private renderRoutineGroup(parent: HTMLElement, group: RoutineGroupViewModel): void {
+		const progress = getRoutineProgress(group);
+		if (!progress) return;
+		const wrapper = parent.createDiv('tg-routine-group');
+		const summary = wrapper.createEl('button', {
+			cls: 'tg-routine-summary',
+			attr: { 'aria-expanded': String(this.routineExpanded), 'aria-controls': `tg-routine-items-${group.id}` },
+		});
+		const icon = summary.createSpan('tg-routine-icon');
+		setIcon(icon, 'refresh-cw');
+		const copy = summary.createSpan('tg-routine-copy');
+		copy.createSpan({ cls: 'tg-routine-title', text: group.title });
+		copy.createSpan({ cls: 'tg-routine-subtitle', text: group.subtitle ?? '今天的固定例行事项' });
+		summary.createSpan({ cls: 'tg-routine-progress', text: `${progress.completed} / ${progress.total}` });
+		const chevron = summary.createSpan('tg-routine-chevron');
+		setIcon(chevron, this.routineExpanded ? 'chevron-down' : 'chevron-right');
+		summary.addEventListener('click', () => {
+			this.routineExpanded = !this.routineExpanded;
+			this.render();
+		});
+		if (!this.routineExpanded) return;
+		const items = wrapper.createDiv({ cls: 'tg-routine-items', attr: { id: `tg-routine-items-${group.id}` } });
+		for (const item of group.items) {
+			const row = items.createDiv(`tg-routine-item${item.done ? ' is-done' : ''}`);
+			const check = row.createSpan('tg-routine-check');
+			setIcon(check, item.done ? 'check' : 'minus');
+			row.createSpan({ cls: 'tg-routine-item-title', text: item.title });
 		}
 	}
 
@@ -469,7 +522,7 @@ export class TaskPanel {
 		const statusButton = meta.createEl('button', {
 			cls: `tg-task-status-badge is-${displayStatus}`,
 			text: statusLabel(displayStatus),
-			attr: { 'aria-label': `任务状态：${statusLabel(displayStatus)}，点击更改`, 'aria-haspopup': 'menu' },
+			attr: { 'aria-label': `任务状态：${statusLabel(displayStatus)}，点击更改`, 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
 		});
 		statusButton.disabled = Boolean(blockReason || mutationPending || !this.options.actions);
 		statusButton.addEventListener('click', (event) => this.openStatusMenu(event, statusButton, task));
@@ -478,7 +531,7 @@ export class TaskPanel {
 		if (task.hasRecurrence) meta.createSpan({ cls: 'tg-task-readonly-badge', text: '循环 · 只读' });
 		else if (blockReason) meta.createSpan({ cls: 'tg-task-readonly-badge', text: '只读' });
 
-		const more = main.createEl('button', { cls: 'tg-task-more-button', attr: { 'aria-label': '更多任务操作', 'aria-haspopup': 'menu' } });
+		const more = main.createEl('button', { cls: 'tg-task-more-button', attr: { 'aria-label': '更多任务操作', 'aria-haspopup': 'menu', 'aria-expanded': 'false' } });
 		setIcon(more, 'ellipsis');
 		more.addEventListener('click', (event) => this.openMoreMenu(event, more, task, blockReason));
 
@@ -500,46 +553,142 @@ export class TaskPanel {
 	private openStatusMenu(event: MouseEvent, anchor: HTMLElement, task: TGTask): void {
 		event.stopPropagation();
 		if (!this.options.actions || getTaskWriteBlockReason(task)) return;
-		const menu = new Menu();
+		const menu = document.body.createDiv({ cls: 'tg-task-menu tg-task-layer', attr: { role: 'menu', 'aria-label': '选择任务状态' } });
 		for (const option of STATUS_OPTIONS.filter((item) => item.editable)) {
-			menu.addItem((item) => item
-				.setTitle(option.label)
-				.setIcon(option.icon)
-				.setChecked(task.status === option.value)
-				.onClick(() => void this.runSetStatus(task, option.editable!)));
+			const selected = task.status === option.value;
+			const item = menu.createEl('button', {
+				cls: `tg-task-menu-item${selected ? ' is-selected' : ''}`,
+				attr: { role: 'menuitemradio', 'aria-checked': String(selected), type: 'button' },
+			});
+			const icon = item.createSpan('tg-task-menu-icon');
+			setIcon(icon, option.icon);
+			item.createSpan({ cls: 'tg-task-menu-label', text: option.label });
+			const check = item.createSpan('tg-task-menu-check');
+			if (selected) setIcon(check, 'check');
+			item.addEventListener('click', () => {
+				this.removeLayer();
+				void this.runSetStatus(task, option.editable!);
+			});
 		}
-		this.showMenu(menu, event, anchor);
+		this.setLayer(menu, anchor, 'menu', 'bottom');
+		this.enableMenuKeyboard(menu);
 	}
 
 	private openMoreMenu(event: MouseEvent, anchor: HTMLElement, task: TGTask, blockReason: string | null): void {
 		event.stopPropagation();
-		const menu = new Menu();
-		if (!blockReason && this.options.actions) {
-			menu.addItem((item) => item.setTitle('编辑任务').setIcon('pencil').onClick(() => this.openEditor(task)));
-			if (task.due) {
-				menu.addItem((item) => item.setTitle('顺延一天').setIcon('calendar-plus').onClick(() => void this.runMutation(task, () => this.options.actions!.postponeTask(task, 1))));
-				menu.addItem((item) => item.setTitle('顺延一周').setIcon('calendar-range').onClick(() => void this.runMutation(task, () => this.options.actions!.postponeTask(task, 7))));
-			}
-			if (task.section === 'unsorted') {
-				menu.addItem((item) => item.setTitle('设为今天').setIcon('sun').onClick(() => void this.runMutation(task, () => this.options.actions!.updateTask(task, { due: getTodayKey() }))));
-				menu.addItem((item) => item.setTitle('设为长期').setIcon('mountain').onClick(() => void this.runMutation(task, () => this.options.actions!.updateTask(task, { goal: true }))));
-			}
-			menu.addSeparator();
+		const writable = Boolean(!blockReason && this.options.actions);
+		const actions = getTaskMenuActions(task, writable);
+		const menu = document.body.createDiv({ cls: 'tg-task-menu tg-task-layer', attr: { role: 'menu', 'aria-label': '任务操作' } });
+		let previousGroup = '';
+		for (const action of actions) {
+			const config = taskMenuActionConfig(action);
+			if (previousGroup && previousGroup !== config.group) menu.createDiv('tg-task-menu-separator');
+			previousGroup = config.group;
+			const item = menu.createEl('button', {
+				cls: `tg-task-menu-item${config.danger ? ' is-danger' : ''}`,
+				attr: { role: 'menuitem', type: 'button' },
+			});
+			const icon = item.createSpan('tg-task-menu-icon');
+			setIcon(icon, config.icon);
+			item.createSpan({ cls: 'tg-task-menu-label', text: config.label });
+			item.addEventListener('click', () => {
+				this.removeLayer();
+				this.runMenuAction(action, task, blockReason);
+			});
 		}
-		menu.addItem((item) => item.setTitle('打开源文件').setIcon('file-text').onClick(() => void this.openSource(task)));
-		if (!blockReason && this.options.actions) {
-			menu.addSeparator();
-			menu.addItem((item) => item.setTitle('删除任务').setIcon('trash-2').setWarning(true).onClick(() => this.openDeleteConfirmation(task)));
-		}
-		this.showMenu(menu, event, anchor);
+		this.setLayer(menu, anchor, 'menu', 'bottom');
+		this.enableMenuKeyboard(menu);
 	}
 
-	private showMenu(menu: Menu, event: MouseEvent, anchor: HTMLElement): void {
-		if (event.clientX || event.clientY) menu.showAtMouseEvent(event);
-		else {
-			const rect = anchor.getBoundingClientRect();
-			menu.showAtPosition({ x: rect.right, y: rect.bottom });
+	private runMenuAction(action: TaskMenuAction, task: TGTask, blockReason: string | null): void {
+		switch (action) {
+			case 'edit':
+				this.openEditor(task);
+				break;
+			case 'postpone-day':
+				if (this.options.actions) void this.runMutation(task, () => this.options.actions!.postponeTask(task, 1));
+				break;
+			case 'postpone-week':
+				if (this.options.actions) void this.runMutation(task, () => this.options.actions!.postponeTask(task, 7));
+				break;
+			case 'set-today':
+				if (this.options.actions) void this.runMutation(task, () => this.options.actions!.updateTask(task, { due: getTodayKey() }));
+				break;
+			case 'set-long-term':
+				if (this.options.actions) void this.runMutation(task, () => this.options.actions!.updateTask(task, { goal: true }));
+				break;
+			case 'show-readonly-reason':
+				new Notice(blockReason ?? '这条任务当前为只读，请在源文件中处理');
+				break;
+			case 'open-source':
+				void this.openSource(task);
+				break;
+			case 'delete':
+				this.openDeleteConfirmation(task);
+				break;
 		}
+	}
+
+	private setLayer(
+		layer: HTMLElement,
+		anchor: HTMLElement,
+		kind: 'filter' | 'menu',
+		preference: 'bottom' | 'right'
+	): void {
+		this.removeLayer();
+		this.layerEl = layer;
+		this.layerAnchor = anchor;
+		this.layerKind = kind;
+		anchor.setAttr('data-tg-layer-anchor', 'true');
+		anchor.setAttr('aria-expanded', 'true');
+		const anchorRect = anchor.getBoundingClientRect();
+		const layerRect = layer.getBoundingClientRect();
+		const position = positionFloatingLayer(anchorRect, layerRect, {
+			width: window.innerWidth,
+			height: window.innerHeight,
+		}, preference);
+		layer.style.left = `${position.left}px`;
+		layer.style.top = `${position.top}px`;
+		layer.setAttr('data-placement', position.placement);
+	}
+
+	private enableMenuKeyboard(menu: HTMLElement): void {
+		const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]:not(:disabled)'));
+		if (items.length === 0) return;
+		menu.addEventListener('keydown', (event) => {
+			const current = Math.max(0, items.indexOf(document.activeElement as HTMLButtonElement));
+			let next: number | null = null;
+			if (event.key === 'ArrowDown') next = (current + 1) % items.length;
+			else if (event.key === 'ArrowUp') next = (current - 1 + items.length) % items.length;
+			else if (event.key === 'Home') next = 0;
+			else if (event.key === 'End') next = items.length - 1;
+			if (next === null) return;
+			event.preventDefault();
+			items[next].focus();
+		});
+		const selected = items.find((item) => item.getAttribute('aria-checked') === 'true');
+		window.requestAnimationFrame(() => (selected ?? items[0]).focus());
+	}
+
+	private removeLayer(): void {
+		this.layerAnchor?.removeAttribute('data-tg-layer-anchor');
+		this.layerAnchor?.setAttr('aria-expanded', 'false');
+		this.layerEl?.remove();
+		this.layerEl = null;
+		this.layerAnchor = null;
+		this.layerKind = null;
+	}
+
+	private dismissLayer(restoreFocus: boolean): void {
+		if (!this.layerEl) return;
+		const anchor = this.layerAnchor;
+		const wasFilter = this.layerKind === 'filter';
+		this.removeLayer();
+		if (wasFilter && this.filterPanelOpen) {
+			this.filterPanelOpen = false;
+			this.render();
+		}
+		if (restoreFocus) window.requestAnimationFrame(() => anchor?.focus());
 	}
 
 	private schedulePreview(row: HTMLElement, task: TGTask, title: HTMLElement): void {
@@ -575,18 +724,15 @@ export class TaskPanel {
 	}
 
 	private positionPreview(anchor: HTMLElement, preview: HTMLElement): void {
-		const margin = 10;
-		const gap = 8;
 		const anchorRect = anchor.getBoundingClientRect();
 		const previewRect = preview.getBoundingClientRect();
-		let left = anchorRect.right + gap;
-		let top = anchorRect.top;
-		if (left + previewRect.width > window.innerWidth - margin) left = anchorRect.left - previewRect.width - gap;
-		if (left < margin) left = Math.min(window.innerWidth - previewRect.width - margin, Math.max(margin, anchorRect.left));
-		if (top + previewRect.height > window.innerHeight - margin) top = window.innerHeight - previewRect.height - margin;
-		if (top < margin) top = margin;
-		preview.style.left = `${Math.round(left)}px`;
-		preview.style.top = `${Math.round(top)}px`;
+		const position = positionFloatingLayer(anchorRect, previewRect, {
+			width: window.innerWidth,
+			height: window.innerHeight,
+		}, 'right', 10, 8);
+		preview.style.left = `${position.left}px`;
+		preview.style.top = `${position.top}px`;
+		preview.setAttr('data-placement', position.placement);
 	}
 
 	private schedulePreviewClose(): void {
@@ -760,4 +906,17 @@ function fileName(path: string): string {
 
 function isFinePointer(): boolean {
 	return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
+
+function taskMenuActionConfig(action: TaskMenuAction): { label: string; icon: string; group: string; danger?: boolean } {
+	switch (action) {
+		case 'edit': return { label: '编辑任务', icon: 'pencil', group: 'edit' };
+		case 'postpone-day': return { label: '顺延一天', icon: 'calendar-plus', group: 'schedule' };
+		case 'postpone-week': return { label: '顺延一周', icon: 'calendar-range', group: 'schedule' };
+		case 'set-today': return { label: '设为今天', icon: 'sun', group: 'schedule' };
+		case 'set-long-term': return { label: '设为长期', icon: 'mountain', group: 'schedule' };
+		case 'show-readonly-reason': return { label: '查看只读原因', icon: 'lock-keyhole', group: 'readonly' };
+		case 'open-source': return { label: '打开源文件', icon: 'file-text', group: 'source' };
+		case 'delete': return { label: '删除任务', icon: 'trash-2', group: 'danger', danger: true };
+	}
 }

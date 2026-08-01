@@ -1,11 +1,42 @@
 /* 容器样式 */
 .tg-container {
-	--tg-bg: var(--background-secondary);
-	--tg-panel-bg: var(--background-primary);
-	--tg-text: var(--text-normal);
-	--tg-muted: var(--text-muted);
-	--tg-border: var(--background-modifier-border);
+	--tg-surface-app: var(--background-secondary);
+	--tg-surface-panel: var(--background-primary);
+	--tg-surface-sunken: color-mix(in srgb, var(--background-secondary) 78%, var(--background-primary));
+	--tg-surface-hover: var(--background-modifier-hover);
+	--tg-border-default: var(--background-modifier-border);
+	--tg-border-subtle: color-mix(in srgb, var(--background-modifier-border) 74%, transparent);
+	--tg-text-primary: var(--text-normal);
+	--tg-text-muted: var(--text-muted);
+	--tg-text-faint: var(--text-faint);
+	--tg-bg: var(--tg-surface-app);
+	--tg-panel-bg: var(--tg-surface-panel);
+	--tg-text: var(--tg-text-primary);
+	--tg-muted: var(--tg-text-muted);
+	--tg-border: var(--tg-border-default);
 	--tg-accent: var(--interactive-accent);
+	--tg-status-overdue: var(--text-error);
+	--tg-status-today: var(--interactive-accent);
+	--tg-status-triage: var(--color-yellow);
+	--tg-status-longterm: var(--color-purple);
+	--tg-status-future: var(--color-blue);
+	--tg-status-done: var(--color-green);
+	--tg-status-cancelled: var(--text-faint);
+	--tg-status-readonly: color-mix(in srgb, var(--text-error) 62%, var(--text-muted));
+	--tg-radius-sm: 4px;
+	--tg-radius-md: 8px;
+	--tg-radius-pill: 999px;
+	--tg-space-1: 2px;
+	--tg-space-2: 4px;
+	--tg-space-3: 6px;
+	--tg-space-4: 8px;
+	--tg-space-5: 12px;
+	--tg-space-6: 16px;
+	--tg-duration-fast: 120ms;
+	--tg-duration-standard: 200ms;
+	--tg-shadow-tooltip: 0 8px 24px color-mix(in srgb, var(--background-modifier-box-shadow) 34%, transparent);
+	--tg-shadow-menu: 0 4px 16px color-mix(in srgb, var(--background-modifier-box-shadow) 30%, transparent);
+	--tg-shadow-popover: 0 10px 30px color-mix(in srgb, var(--background-modifier-box-shadow) 38%, transparent);
 	--tg-cell-size: 20px;
 	--tg-minute-size: 16px;
 	--tg-panel-radius: 8px;
@@ -15,9 +46,13 @@
 
 	background: var(--tg-bg);
 	color: var(--tg-text);
-	padding: 12px;
+	box-sizing: border-box;
+	padding: clamp(8px, 2.5cqi, 12px);
 	height: 100%;
 	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-gutter: stable;
+	font-family: var(--font-interface, var(--font-ui));
 }
 
 .tg-wrapper {
@@ -33,17 +68,17 @@
 	display: flex;
 	justify-content: center;
 	padding: 0 0 10px;
-	background: linear-gradient(to bottom, var(--tg-bg) 78%, transparent);
+	background: var(--tg-bg);
 }
 
 .tg-view-switcher {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	width: min(260px, 100%);
+	width: min(760px, 100%);
 	padding: 3px;
 	border: 1px solid color-mix(in srgb, var(--tg-border) 82%, transparent);
-	border-radius: 10px;
-	background: color-mix(in srgb, var(--background-modifier-hover) 72%, var(--tg-panel-bg));
+	border-radius: var(--tg-radius-md);
+	background: var(--tg-surface-sunken);
 }
 
 .tg-view-switcher-button {
@@ -53,18 +88,18 @@
 	justify-content: center;
 	gap: 6px;
 	min-width: 0;
-	height: 32px;
+	height: 36px;
 	margin: 0;
 	padding: 0 12px;
 	border: 0;
-	border-radius: 7px;
+	border-radius: 6px;
 	background: transparent;
 	box-shadow: none;
 	color: var(--tg-muted);
 	font-size: 12px;
 	font-weight: 600;
 	cursor: pointer;
-	transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+	transition: background-color var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, box-shadow var(--tg-duration-fast) ease;
 }
 
 .tg-view-switcher-button:hover {
@@ -73,7 +108,7 @@
 
 .tg-view-switcher-button.is-active {
 	background: var(--tg-panel-bg);
-	box-shadow: 0 1px 3px color-mix(in srgb, var(--background-modifier-box-shadow) 30%, transparent);
+	box-shadow: 0 1px 2px color-mix(in srgb, var(--background-modifier-box-shadow) 24%, transparent);
 	color: var(--tg-text);
 }
 
@@ -104,9 +139,10 @@
 /* 模块通用样式 */
 .tg-module {
 	background: var(--tg-panel-bg);
-	border-radius: var(--tg-panel-radius);
+	border-radius: var(--tg-radius-md);
 	padding: var(--tg-module-padding);
-	border: 1px solid var(--tg-border);
+	border: 1px solid var(--tg-border-default);
+	box-shadow: none;
 }
 
 .tg-module-header {
@@ -839,34 +875,34 @@
 
 /* 任务中心 */
 .tg-task-panel {
-	--tg-task-radius-sm: 7px;
-	--tg-task-radius: 10px;
-	--tg-task-radius-lg: 13px;
+	--tg-task-radius-sm: var(--tg-radius-sm);
+	--tg-task-radius: var(--tg-radius-md);
+	--tg-task-radius-lg: 10px;
 	--tg-task-space-1: 4px;
 	--tg-task-space-2: 8px;
 	--tg-task-space-3: 12px;
 	--tg-task-space-4: 16px;
-	--tg-task-card: color-mix(in srgb, var(--background-primary) 94%, var(--background-secondary));
-	--tg-task-card-hover: color-mix(in srgb, var(--background-modifier-hover) 68%, var(--background-primary));
-	--tg-task-soft-border: color-mix(in srgb, var(--background-modifier-border) 76%, transparent);
-	--tg-task-overdue: var(--text-error);
-	--tg-task-today: var(--interactive-accent);
-	--tg-task-unsorted: var(--color-yellow);
-	--tg-task-goal: var(--color-purple);
-	--tg-task-future: var(--color-blue);
-	--tg-task-done: var(--color-green);
-	--tg-task-cancelled: var(--text-faint);
+	--tg-task-card: var(--tg-surface-panel);
+	--tg-task-card-hover: color-mix(in srgb, var(--tg-surface-hover) 62%, var(--tg-surface-panel));
+	--tg-task-soft-border: var(--tg-border-subtle);
+	--tg-task-overdue: var(--tg-status-overdue);
+	--tg-task-today: var(--tg-status-today);
+	--tg-task-unsorted: var(--tg-status-triage);
+	--tg-task-goal: var(--tg-status-longterm);
+	--tg-task-future: var(--tg-status-future);
+	--tg-task-done: var(--tg-status-done);
+	--tg-task-cancelled: var(--tg-status-cancelled);
 
 	width: 100%;
 	max-width: 760px;
 	min-width: 0;
 	margin-inline: auto;
-	overflow: hidden;
+	overflow: visible;
 	padding: 2px 0 18px;
 }
 
 .theme-light .tg-task-panel {
-	--tg-task-card: color-mix(in srgb, var(--background-primary) 97%, var(--background-secondary));
+	--tg-task-card: var(--tg-surface-panel);
 	--tg-task-card-hover: color-mix(in srgb, var(--background-modifier-hover) 45%, var(--background-primary));
 	--tg-task-soft-border: color-mix(in srgb, var(--background-modifier-border) 88%, transparent);
 }
@@ -919,6 +955,12 @@
 	box-shadow: none;
 	color: var(--tg-muted);
 	cursor: pointer;
+	font: inherit;
+}
+
+.tg-task-panel button {
+	appearance: none !important;
+	font-family: inherit;
 }
 
 .tg-task-icon-button {
@@ -983,8 +1025,9 @@
 	min-height: 48px;
 	padding: 8px 9px;
 	border: 1px solid var(--tg-task-soft-border);
-	border-radius: var(--tg-task-radius);
+	border-radius: var(--tg-radius-md);
 	background: var(--tg-task-card);
+	box-shadow: none;
 }
 
 .tg-task-stat-icon {
@@ -1073,8 +1116,8 @@
 	min-width: 0;
 	padding: 0 34px 0 32px;
 	border: 1px solid var(--tg-task-soft-border);
-	border-radius: 9px;
-	background: color-mix(in srgb, var(--background-primary) 91%, var(--background-secondary));
+	border-radius: var(--tg-radius-md);
+	background: var(--tg-task-card);
 	box-shadow: none;
 	color: var(--tg-text);
 	font-size: 11.5px;
@@ -1103,7 +1146,7 @@
 	align-items: center;
 	gap: 5px;
 	min-width: 0;
-	overflow-x: auto;
+	overflow: visible;
 	scrollbar-width: none;
 }
 
@@ -1134,7 +1177,7 @@
 	height: 30px;
 	margin: 0;
 	padding: 0 8px;
-	border-radius: 8px;
+	border-radius: var(--tg-radius-md);
 	font-size: 10.5px;
 }
 
@@ -1169,10 +1212,6 @@
 	font-weight: 700;
 }
 
-.tg-task-filter-compact {
-	display: none;
-}
-
 .tg-task-filter-reset {
 	min-width: max-content;
 	height: 28px;
@@ -1183,16 +1222,16 @@
 }
 
 .tg-task-filter-panel {
-	position: absolute;
-	top: calc(100% - 1px);
-	left: 0;
-	right: 0;
-	z-index: 15;
+	position: fixed;
+	z-index: var(--layer-popover, 1000);
+	width: min(320px, calc(100vw - 20px));
+	max-height: min(560px, calc(100vh - 20px));
+	overflow-y: auto;
 	padding: 11px;
 	border: 1px solid var(--tg-task-soft-border);
 	border-radius: var(--tg-task-radius);
-	background: color-mix(in srgb, var(--background-primary) 96%, var(--background-secondary));
-	box-shadow: 0 8px 22px color-mix(in srgb, var(--background-modifier-box-shadow) 18%, transparent);
+	background: var(--background-primary);
+	box-shadow: var(--tg-shadow-popover);
 }
 
 .tg-task-filter-group + .tg-task-filter-group {
@@ -1375,11 +1414,11 @@
 	gap: 8px;
 	width: 100%;
 	min-height: 42px;
-	margin: 0 0 5px;
-	padding: 5px 4px;
-	border: 0;
-	border-radius: 8px;
-	background: transparent;
+	margin: 0 0 7px;
+	padding: 7px 9px;
+	border: 1px solid var(--tg-task-soft-border);
+	border-radius: var(--tg-radius-md);
+	background: var(--tg-task-card);
 	box-shadow: none;
 	color: var(--tg-text);
 	text-align: left;
@@ -1391,7 +1430,8 @@
 }
 
 .tg-task-section-heading:not([aria-disabled="true"]):hover {
-	background: var(--background-modifier-hover);
+	border-color: color-mix(in srgb, var(--text-muted) 25%, var(--tg-task-soft-border));
+	background: var(--tg-task-card-hover);
 }
 
 .tg-task-section-heading-main,
@@ -1513,7 +1553,7 @@
 	border: 1px solid var(--tg-task-soft-border);
 	border-radius: var(--tg-task-radius);
 	background: var(--tg-task-card);
-	box-shadow: 0 1px 1px color-mix(in srgb, var(--background-modifier-box-shadow) 9%, transparent);
+	box-shadow: none;
 	transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
 
@@ -1578,8 +1618,8 @@
 
 .tg-task-panel button.tg-task-checkbox,
 .tg-task-panel button.tg-task-description {
-	background: transparent !important;
-	box-shadow: none !important;
+	background: transparent;
+	box-shadow: none;
 }
 
 .tg-task-checkbox svg {
@@ -1702,9 +1742,9 @@
 	min-height: 20px;
 	margin: 0;
 	padding: 2px 6px;
-	border: 1px solid transparent;
+	border: 1px solid color-mix(in srgb, currentColor 42%, transparent);
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+	background: transparent;
 	box-shadow: none;
 	color: var(--tg-muted);
 	font-size: 9px;
@@ -1741,7 +1781,7 @@
 	padding: 2px;
 	border: 1px solid var(--tg-task-soft-border);
 	border-radius: 7px;
-	background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+	background: var(--background-primary);
 	opacity: 0;
 	pointer-events: none;
 	transform: translateY(-2px);
@@ -1825,6 +1865,225 @@
 	color: var(--text-normal);
 	pointer-events: auto;
 	animation: tg-task-preview-in 120ms ease-out;
+}
+
+.tg-task-layer,
+.tg-task-preview {
+	--tg-task-soft-border: color-mix(in srgb, var(--background-modifier-border) 82%, transparent);
+	--tg-task-overdue: var(--text-error);
+	--tg-task-today: var(--interactive-accent);
+	--tg-task-done: var(--color-green);
+	--tg-task-cancelled: var(--text-faint);
+	--tg-shadow-menu: 0 4px 16px color-mix(in srgb, var(--background-modifier-box-shadow) 30%, transparent);
+	--tg-shadow-popover: 0 10px 30px color-mix(in srgb, var(--background-modifier-box-shadow) 38%, transparent);
+	box-sizing: border-box;
+	font-family: var(--font-interface, var(--font-ui));
+}
+
+.tg-task-menu {
+	position: fixed;
+	z-index: var(--layer-popover, 1000);
+	display: flex;
+	flex-direction: column;
+	width: max-content;
+	min-width: 190px;
+	max-width: min(280px, calc(100vw - 20px));
+	padding: 6px;
+	border: 1px solid var(--tg-task-soft-border);
+	border-radius: 10px;
+	background: var(--background-primary);
+	box-shadow: var(--tg-shadow-menu);
+}
+
+.tg-task-menu-item {
+	appearance: none;
+	display: grid;
+	grid-template-columns: 18px minmax(0, 1fr) 16px;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 34px;
+	margin: 0;
+	padding: 6px 9px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.tg-task-menu-item:hover,
+.tg-task-menu-item:focus-visible,
+.tg-task-menu-item.is-selected {
+	background: var(--background-modifier-hover);
+}
+
+.tg-task-menu-item:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--interactive-accent) 75%, transparent);
+	outline-offset: -1px;
+}
+
+.tg-task-menu-item.is-danger {
+	color: var(--text-error);
+}
+
+.tg-task-menu-icon,
+.tg-task-menu-icon svg,
+.tg-task-menu-check,
+.tg-task-menu-check svg {
+	display: inline-flex;
+	width: 14px;
+	height: 14px;
+}
+
+.tg-task-menu-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tg-task-menu-check {
+	color: var(--interactive-accent);
+}
+
+.tg-task-menu-separator {
+	height: 1px;
+	margin: 5px 3px;
+	background: var(--background-modifier-border);
+}
+
+.tg-routine-group {
+	overflow: hidden;
+	border: 1px solid color-mix(in srgb, var(--tg-task-today) 32%, var(--tg-task-soft-border));
+	border-radius: var(--tg-radius-md);
+	background: color-mix(in srgb, var(--tg-task-today) 5%, var(--tg-task-card));
+}
+
+.tg-routine-summary {
+	appearance: none;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 48px;
+	margin: 0;
+	padding: 8px 10px;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.tg-routine-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	flex: 0 0 26px;
+	border-radius: 7px;
+	background: color-mix(in srgb, var(--tg-task-today) 14%, transparent);
+	color: var(--tg-task-today);
+}
+
+.tg-routine-icon svg,
+.tg-routine-chevron svg {
+	width: 14px;
+	height: 14px;
+}
+
+.tg-routine-copy {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.tg-routine-title {
+	font-size: 11.5px;
+	font-weight: 650;
+}
+
+.tg-routine-subtitle {
+	overflow: hidden;
+	color: var(--text-faint);
+	font-size: 9px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tg-routine-progress {
+	flex: 0 0 auto;
+	color: var(--tg-task-today);
+	font-family: var(--font-monospace);
+	font-size: 10px;
+	font-weight: 650;
+}
+
+.tg-routine-chevron {
+	display: inline-flex;
+	color: var(--text-faint);
+}
+
+.tg-routine-items {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 2px 10px 9px 44px;
+}
+
+.tg-routine-item {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 0;
+	min-height: 28px;
+}
+
+.tg-routine-check {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 15px;
+	height: 15px;
+	flex: 0 0 15px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	color: var(--text-faint);
+}
+
+.tg-routine-check svg {
+	width: 10px;
+	height: 10px;
+}
+
+.tg-routine-item.is-done .tg-routine-check {
+	border-color: var(--tg-task-done);
+	background: var(--tg-task-done);
+	color: var(--text-on-accent);
+}
+
+.tg-routine-item-title {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--tg-text);
+	font-size: 10.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tg-routine-item.is-done .tg-routine-item-title {
+	color: var(--tg-muted);
+	text-decoration: line-through;
 }
 
 @keyframes tg-task-preview-in {
@@ -2017,6 +2276,10 @@
 
 .modal.tg-task-edit-modal {
 	width: min(560px, calc(100vw - 28px));
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
+	background: var(--background-primary);
+	box-shadow: 0 14px 42px color-mix(in srgb, var(--background-modifier-box-shadow) 40%, transparent);
 }
 
 .tg-task-modal-form,
@@ -2045,15 +2308,80 @@
 	resize: vertical;
 }
 
+.tg-task-modal-description,
+.tg-task-modal-field input[type="date"],
+.tg-task-modal-field select {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 38px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+	box-shadow: none;
+	color: var(--text-normal);
+	font: inherit;
+}
+
+.tg-task-modal-description:focus,
+.tg-task-modal-field input[type="date"]:focus,
+.tg-task-modal-field select:focus {
+	border-color: color-mix(in srgb, var(--interactive-accent) 68%, var(--background-modifier-border));
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+}
+
 .tg-task-modal-quick-dates {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
 }
 
-.tg-task-modal-quick-dates button {
-	padding: 4px 9px;
-	font-size: 11px;
+.tg-task-modal-button {
+	appearance: none;
+	min-height: 34px;
+	margin: 0;
+	padding: 5px 11px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 7px;
+	background: var(--background-secondary);
+	box-shadow: none;
+	color: var(--text-normal);
+	font: inherit;
+	font-size: 11.5px;
+	cursor: pointer;
+}
+
+.tg-task-modal-button:hover:not(:disabled),
+.tg-task-modal-button:focus-visible {
+	border-color: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-modifier-border));
+	background: var(--background-modifier-hover);
+}
+
+.tg-task-modal-button:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--interactive-accent) 72%, transparent);
+	outline-offset: 1px;
+}
+
+.tg-task-modal-button.is-quiet {
+	min-height: 30px;
+	padding: 3px 9px;
+	font-size: 10.5px;
+}
+
+.tg-task-modal-button.is-primary {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.tg-task-modal-button.is-danger {
+	border-color: color-mix(in srgb, var(--text-error) 55%, var(--background-modifier-border));
+	background: color-mix(in srgb, var(--text-error) 11%, var(--background-secondary));
+	color: var(--text-error);
+}
+
+.tg-task-modal-button:disabled {
+	opacity: 0.58;
+	cursor: wait;
 }
 
 .tg-task-modal-switch-field {
@@ -2144,6 +2472,10 @@
 
 .modal.tg-task-delete-modal {
 	width: min(500px, calc(100vw - 28px));
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
+	background: var(--background-primary);
+	box-shadow: 0 14px 42px color-mix(in srgb, var(--background-modifier-box-shadow) 40%, transparent);
 }
 
 .tg-task-delete-warning {
