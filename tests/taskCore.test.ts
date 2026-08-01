@@ -1,4 +1,6 @@
 import * as assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
 	classifyTask,
 	getTaskStatusKind,
@@ -501,6 +503,30 @@ test('duplicate and wrong-date routine instances remain visible but readonly', (
 test('routine calendar uses the natural previous day across month and year boundaries', () => {
 	assert.equal(previousDateKey('2026-08-01'), '2026-07-31');
 	assert.equal(previousDateKey('2026-01-01'), '2025-12-31');
+});
+
+test('task status control keeps a separate compact visual label', () => {
+	const source = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	assert.match(source, /cls: `tg-task-status-control is-\$\{displayStatus\}`/);
+	assert.match(source, /statusButton\.createSpan\(\{ cls: `tg-task-status-badge is-\$\{displayStatus\}`/);
+	assert.match(source, /statusButton\.addEventListener\('click', \(event\) => this\.openStatusMenu/);
+});
+
+test('task card style contract matches the compact Claude design', () => {
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	const card = css.match(/\.tg-task-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
+	const badge = css.match(/\.tg-task-status-badge \{([\s\S]*?)\n\}/)?.[1] ?? '';
+	assert.match(card, /padding:\s*10px 12px/);
+	assert.match(card, /border-radius:\s*var\(--tg-task-radius\)/);
+	assert.match(badge, /min-height:\s*18px/);
+	assert.match(badge, /padding:\s*2px 8px/);
+	assert.match(badge, /border:\s*1px solid/);
+	assert.match(badge, /background:\s*transparent !important/);
+	assert.match(badge, /box-shadow:\s*none !important/);
+	assert.match(badge, /font-size:\s*10px/);
+	assert.doesNotMatch(badge, /(?:^|\n)\s*(?:width|min-width|max-width):\s*[1-9]\d*px/);
+	assert.doesNotMatch(css, /\.tg-task-status-badge\.is-(?:in-progress|done|cancelled|unknown)\s*\{[^}]*background:/);
+	assert.match(css, /@media \(hover: none\), \(pointer: coarse\)[\s\S]*?\.tg-task-status-control \{[\s\S]*?min-width:\s*36px(?:\s*!important)?;[\s\S]*?min-height:\s*36px(?:\s*!important)?;/);
 });
 
 console.log(`\n${passed} task core tests passed.`);

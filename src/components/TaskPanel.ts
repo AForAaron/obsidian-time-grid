@@ -610,10 +610,10 @@ export class TaskPanel {
 			if (task.section === 'overdue') due.addClass('is-overdue');
 		}
 		const statusButton = meta.createEl('button', {
-			cls: `tg-task-status-badge is-${displayStatus}`,
-			text: statusLabel(displayStatus, Boolean(task.routine)),
+			cls: `tg-task-status-control is-${displayStatus}`,
 			attr: { 'aria-label': `任务状态：${statusLabel(displayStatus, Boolean(task.routine))}，点击更改`, 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
 		});
+		statusButton.createSpan({ cls: `tg-task-status-badge is-${displayStatus}`, text: statusLabel(displayStatus, Boolean(task.routine)) });
 		statusButton.disabled = Boolean(blockReason || mutationPending || !this.options.actions);
 		statusButton.addEventListener('click', (event) => this.openStatusMenu(event, statusButton, task));
 		if (task.priority) meta.createSpan({ cls: `tg-task-priority is-${task.priority}`, text: `${priorityGlyph(task.priority)} ${priorityLabel(task.priority)}` });

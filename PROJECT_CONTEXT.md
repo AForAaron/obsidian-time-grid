@@ -72,14 +72,14 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 今日计时分布已完成新版本：圆环图、中心总时长、空状态、格式异常状态、进行中状态、任务配色、Top 5 + 其他合并和图例悬停联动已实现。
 - 计时统计边界已修正：`simple-time-tracker` 时长会按当前日期边界裁剪，避免跨日记录影响单日统计。
 - 写作增量统计已具备：插件启用后为全库 Markdown 建立字数基线，并按日期记录新增字数。
-- 最新构建/安装状态：每日流程集成保持普通任务 `TaskWriter` 安全规则不变；49 项核心自动测试、24 次临时 Git vault 写入、生产打包和真实 Obsidian 只读迁移预览均已通过，最新构建已同步到 Aaron_Ob。
+- 最新构建/安装状态：每日流程集成保持普通任务 `TaskWriter` 安全规则不变；51 项核心自动测试、24 次临时 Git vault 写入、生产打包和真实 Obsidian 非写入 UI 验收均已通过，最新构建已同步到 Aaron_Ob。
 - 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433。
 - 任务模块 Phase 2 已完成：四态菜单、完成/重新打开快捷按钮、终态日期、严格唯一定位、失败重扫和写作统计抑制已接入；异常、未知状态、循环和重复任务保持只读或拒写。
 - 任务模块 Phase 3 已完成：支持编辑描述、到期日、优先级和长期标签；失败时弹窗保持打开并提供可复制错误；只读任务只显示诊断和源文件入口。
 - 任务模块 Phase 4 已完成：支持删除二次确认、顺延一天、Shift 顺延一周，以及待分类“设为今天/设为长期”；无到期日不显示顺延。
 - 任务中心 UI 重设计已完成：顶部双视图切换、最后视图持久化、四统计卡、即时搜索、状态/优先级/来源组合筛选、过滤计数、未来三组、已结束合并、桌面完整浮层、触屏行内展开，以及统一 portal 状态菜单、更多菜单和筛选浮层均已接入。
 - 响应式样式使用任务视图容器查询，覆盖 `≤320px`、`321–520px`、`>520px`；极窄侧栏固定 2×2 统计与收口筛选，不再常驻编辑、顺延、删除按钮，深色与浅色均使用 Obsidian 主题变量和 `color-mix`。
-- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 49 个核心用例及独立临时 Git vault 集成验证；包含配置格式、稳定 ID、日期计划、模板迁移、幂等生成、历史排除、今天编辑、取消语义、提醒判断、重复/错日期只读、CRLF/BOM 和并发旧版本拒写。
+- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 51 个核心用例及独立临时 Git vault 集成验证；包含配置格式、稳定 ID、日期计划、模板迁移、幂等生成、历史排除、今天编辑、取消语义、提醒判断、重复/错日期只读、CRLF/BOM、并发旧版本拒写和任务卡视觉契约。
 
 ## 修改等级
 
@@ -209,3 +209,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/types/routine.ts`、`src/utils/routineFormat.ts`、`src/utils/routineMarker.ts`、`src/utils/routineRepository.ts`、`src/utils/routineIndex.ts`、`src/utils/routineWriter.ts`、`src/utils/routineReminder.ts`、`src/components/Routine*.ts`、`src/components/TaskPanel.ts`、`src/main.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`tests/routineVault.integration.ts`
 - 验证方式：`npm test` 49 项核心用例通过，临时 Git vault 完成 24 次真实文件写入并拒绝并发旧版本写回；`npm run build` 与 `git diff --check` 通过。Aaron_Ob 只读加载后普通任务由 628 降至 339，正确显示昨日漏做 5 项和“创建今日日记后启用每日流程”；迁移预览准确识别 `00-Templates/Daily.md.md` 的 5 项，随后取消，配置笔记、备份和模板均未改变。
 - 后续注意事项：真实 vault 尚未执行迁移；用户应在 Time Grid 中审阅并点击“确认迁移”。分支 `codex/routine-integration` 只推送、不自动合并 `main`。
+
+### 2026-08-02（Claude 任务卡精确校准）
+
+- 修改等级：L1 展示层校准
+- 变更摘要：将状态菜单按钮拆分为透明交互层与独立视觉标签，状态标签统一为 `38×18px` 左右的透明背景、1px 细边框药丸；同步校准任务卡内边距、3px 分区色线、13px 双行标题、18px checkbox 视觉和 26px 更多按钮。触屏仍保留至少 36px 交互热区，第三方主题无法再把状态标签覆盖为圆形默认按钮。
+- 涉及文件：`src/components/TaskPanel.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`
+- 验证方式：`npm test` 51 项核心用例和临时 Git vault 24 次写入通过；`npm run build`、设计系统 bundle 语法检查与 `git diff --check` 通过。Aaron_Ob 中重新加载插件后确认新版 DOM 为 54 个 `.tg-task-status-control` 与 54 个内部标签，首个可见标签计算尺寸为 `38×18px`，背景透明、无阴影、边框 1px；四态菜单可打开并用 Esc 关闭，全程未执行任务写入。
+- 后续注意事项：仅复制新构建文件不足以刷新已打开的插件实例；需要关闭/开启 Time Grid 插件或重启 Obsidian。旧安装产物的临时回滚备份位于 `/private/tmp/time-grid-ui-backup.wyBEyk`。
