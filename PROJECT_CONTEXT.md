@@ -37,6 +37,19 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 根目录 `main.js` 和 `styles.css` 是构建/发布产物，受 `.gitignore` 忽略；修改源码后需要重新构建，并用 `install.sh` 同步到实际 Obsidian vault 的 `.obsidian/plugins/time-grid/`。
 - 安装到 Obsidian 后，需要关闭/开启 Time Grid 插件、执行 Reload app without saving，或重启 Obsidian 才能加载新的 JS/CSS。
 
+## 当前进度
+
+截至 2026-06-26，项目处于可构建、可安装到 Obsidian vault 使用的阶段。当前重点进度记录如下：
+
+- 基础插件骨架已完成：插件清单、TypeScript 入口、esbuild 构建、安装脚本和右侧面板注册流程已具备。
+- 核心时间可视化已完成：已包含近 3 个月、近 6 个月、近 1 年活动热力图、本月日期网格、24 小时网格和 60 分钟网格。
+- 日记数据接入已完成：可以读取 Obsidian 日记，并解析 `simple-time-tracker` 代码块作为计时数据来源。
+- 今日计时分布已完成新版本：圆环图、中心总时长、空状态、格式异常状态、进行中状态、任务配色、Top 5 + 其他合并和图例悬停联动已实现。
+- 计时统计边界已修正：`simple-time-tracker` 时长会按当前日期边界裁剪，避免跨日记录影响单日统计。
+- 写作增量统计已具备：插件启用后为全库 Markdown 建立字数基线，并按日期记录新增字数。
+- 最新构建/安装状态：上一轮功能改动已通过 TypeScript 检查和生产打包，并同步到两个 Obsidian vault 的 `time-grid` 插件目录。
+- 当前没有单独测试框架；现阶段以 `npm run build`、生产打包和 Obsidian 内手动检查作为主要验证方式。
+
 ## 修改等级
 
 用下面的等级描述每次改动的范围，便于快速判断风险。
@@ -93,3 +106,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/components/DailyPieChart.ts`、`src/utils/dailyNotesParser.ts`、`src/components/TimeHeatmap.ts`、`src/styles/main.css`、`styles.css`、`main.js`
 - 验证方式：运行 TypeScript 检查、生产打包与空白检查；将构建产物同步到 `Aaron_Ob` 和 `Documents/Obsidian Vault` 两个 Obsidian vault 的 `time-grid` 插件目录，并确认安装目录中存在 `tg-pie-ring` / `tg-pie-center` 新 UI 标记。
 - 后续注意事项：Obsidian 看不到变化时，优先确认实际 vault 插件目录是否已经复制最新 `main.js` 和 `styles.css`，然后重载或重启 Obsidian。根目录构建产物被 `.gitignore` 忽略，不会进入 Git 提交。
+
+### 2026-06-26（进度同步）
+
+- 修改等级：L0 文档或注释
+- 变更摘要：新增“当前进度”章节，只记录已经完成和已经验证的项目状态，不加入未来规划或路线图。
+- 涉及文件：`PROJECT_CONTEXT.md`
+- 验证方式：未运行构建；本次只修改项目上下文文档，不影响运行时代码。
+- 后续注意事项：后续每次完成代码或安装验证后，优先更新“当前进度”和“变更记录”，保持该文件代表最新项目状态。
