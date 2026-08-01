@@ -11,6 +11,20 @@ import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange,
 import { getEffectiveWritingDelta, normalizeTimeGridData } from '../src/utils/writingStats';
 import { countFilteredSections, createEmptyTaskFilters, filterTasks, groupFutureTasks, hasActiveTaskFilters } from '../src/utils/taskView';
 import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer } from '../src/utils/taskUi';
+import {
+	activeRoutineGroups,
+	adoptLegacyRoutineInstances,
+	getRoutineTaskLineNumbers,
+	insertRoutineInstancesAtSlot,
+	parseRoutineDocument,
+	parseRoutineInstances,
+	previousDateKey,
+	replaceLegacyRoutineWithSlot,
+	routineDocumentFromLegacy,
+	serializeRoutineDocument,
+} from '../src/utils/routineFormat';
+import { RoutineDocument } from '../src/types/routine';
+import { isRoutineReminderDue, reminderKey } from '../src/utils/routineReminder';
 
 let passed = 0;
 
@@ -344,6 +358,149 @@ test('routine progress hides empty models and counts completed items', () => {
 			{ id: 'c', title: 'C', done: true },
 		],
 	}), { completed: 2, total: 3 });
+});
+
+const routineDocument: RoutineDocument = {
+	version: 1,
+	groups: [{
+		id: 'group-daily',
+		title: '每日流程',
+		subtitle: '固定例行事项',
+		enabled: true,
+		order: 0,
+		items: [{
+			id: 'item-medicine',
+			title: '吃药',
+			enabled: true,
+			order: 0,
+			priority: 'high',
+			schedule: { weekdays: [1, 2, 3, 4, 5, 6, 7], activeFrom: '2026-08-01', activeUntil: '2026-08-31', reminderTime: '08:30' },
+		}, {
+			id: 'item-ai',
+			title: '今日 AI 资讯',
+			enabled: true,
+			order: 1,
+			schedule: { weekdays: [1, 3, 5] },
+		}],
+	}],
+};
+
+test('routine definition round-trips stable IDs schedules ordering and priorities', () => {
+	const serialized = serializeRoutineDocument(routineDocument);
+	const parsed = parseRoutineDocument(serialized);
+	assert.equal(parsed.diagnostics.length, 0);
+	assert.equal(serializeRoutineDocument(parsed.document), serialized);
+	assert.deepEqual(parsed.document.groups[0].items[0], routineDocument.groups[0].items[0]);
+	assert.deepEqual(parsed.document.groups[0].items[1].schedule.weekdays, [1, 3, 5]);
+});
+
+test('routine schedules include both date boundaries and respect weekdays', () => {
+	assert.deepEqual(activeRoutineGroups(routineDocument, '2026-08-03')[0].items.map((item) => item.id), ['item-medicine', 'item-ai']);
+	assert.deepEqual(activeRoutineGroups(routineDocument, '2026-08-04')[0].items.map((item) => item.id), ['item-medicine']);
+	assert.equal(activeRoutineGroups(routineDocument, '2026-08-01')[0].items.some((item) => item.id === 'item-medicine'), true);
+	assert.equal(activeRoutineGroups(routineDocument, '2026-08-31')[0].items.some((item) => item.id === 'item-medicine'), true);
+	assert.equal(activeRoutineGroups(routineDocument, '2026-09-01').some((group) => group.items.some((item) => item.id === 'item-medicine')), false);
+});
+
+test('routine generation inserts at a unique slot once and preserves CRLF', () => {
+	const original = '\uFEFF# 日记\r\n<!-- time-grid-routine-slot:start -->\r\n<!-- time-grid-routine-slot:end -->\r\n尾部\r\n';
+	const first = insertRoutineInstancesAtSlot(original, routineDocument, '2026-08-03');
+	assert.equal(first.changed, true);
+	assert.match(first.content, /time-grid-routine-instance group="group-daily" date="2026-08-03" item="item-medicine" reminder="08:30"/);
+	assert.equal(first.content.includes('\r\n'), true);
+	assert.equal(first.content.startsWith('\uFEFF'), true);
+	const second = insertRoutineInstancesAtSlot(first.content, routineDocument, '2026-08-03');
+	assert.equal(second.changed, false);
+	assert.equal(second.content, first.content);
+});
+
+test('legacy routine migration extracts readable groups and replaces only the template block', () => {
+	const legacy = '# Daily\n\n> [!CHECK] :LiRotateCw: 每日流程(Routine)\n> - [ ] 吃药\n> - [ ] 今日 AI 资讯\n>\n## 其他\n';
+	const document = routineDocumentFromLegacy(legacy);
+	assert.equal(document.groups.length, 1);
+	assert.deepEqual(document.groups[0].items.map((item) => item.title), ['吃药', '今日 AI 资讯']);
+	const replaced = replaceLegacyRoutineWithSlot(legacy);
+	assert.equal(replaced.changed, true);
+	assert.match(replaced.content, /time-grid-routine-slot:start/);
+	assert.match(replaced.content, /## 其他/);
+	assert.equal(replaced.content.includes('- [ ] 吃药'), false);
+});
+
+test('today legacy adoption adds stable markers while leaving unmatched today-only tasks alone', () => {
+	const legacy = '> [!CHECK] 每日流程\n> - [ ] 吃药\n> - [ ] 临时加餐\n';
+	const adopted = adoptLegacyRoutineInstances(legacy, routineDocument, '2026-08-03');
+	assert.equal(adopted.changed, true);
+	assert.match(adopted.content, /吃药 <!-- time-grid-routine-instance group="group-daily" date="2026-08-03" item="item-medicine" reminder="08:30" legacy="true" -->/);
+	assert.match(adopted.content, /> - \[ \] 临时加餐\n/);
+	const parsed = parseRoutineInstances(adopted.content, '02-Daily Notes/2026-08-03.md', '2026-08-03', routineDocument, '#goal');
+	assert.equal(parsed.instances.find((item) => item.itemId === 'item-medicine')?.todayOnly, false);
+	assert.equal(parsed.instances.find((item) => item.task.description === '临时加餐')?.todayOnly, true);
+});
+
+test('ambiguous legacy titles are never guessed during adoption', () => {
+	const duplicate: RoutineDocument = {
+		version: 1,
+		groups: [{ ...routineDocument.groups[0], items: [routineDocument.groups[0].items[0], { ...routineDocument.groups[0].items[0], id: 'item-duplicate', order: 2 }] }],
+	};
+	const content = '> [!CHECK] 每日流程\n> - [ ] 吃药\n';
+	const adopted = adoptLegacyRoutineInstances(content, duplicate, '2026-08-03');
+	assert.equal(adopted.changed, false);
+	assert.match(adopted.error ?? '', /无法唯一匹配/);
+	assert.equal(adopted.content, content);
+});
+
+test('new and historical legacy routine task lines are excluded from the ordinary task index', () => {
+	const generated = insertRoutineInstancesAtSlot('<!-- time-grid-routine-slot:start -->\n<!-- time-grid-routine-slot:end -->\n', routineDocument, '2026-08-03').content;
+	assert.equal(getRoutineTaskLineNumbers(generated).size, 2);
+	const legacy = '> [!CHECK] 每日惯例\n> - [ ] A\n> - [x] B\n';
+	assert.deepEqual([...getRoutineTaskLineNumbers(legacy)], [1, 2]);
+});
+
+test('routine task edits preserve hidden identity and place terminal dates before it', () => {
+	const content = insertRoutineInstancesAtSlot('<!-- time-grid-routine-slot:start -->\n<!-- time-grid-routine-slot:end -->\n', routineDocument, '2026-08-03').content;
+	const line = content.split('\n').find((value) => value.includes('item-medicine'))!;
+	const task = parseTaskLine(line, 'Daily.md', 3, '2026-08-03', '#goal');
+	const done = serializeStatusChange(task, 'done', DEFAULT_TASK_SETTINGS, '2026-08-03');
+	assert.match(done, /✅ 2026-08-03 <!-- time-grid-routine-instance/);
+	const renamed = serializeTaskPatch(parseTaskLine(done, 'Daily.md', 3, '2026-08-03', '#goal'), {
+		description: '今天吃药',
+		routineReminderTime: '09:15',
+		routineGroupId: 'group-health',
+	}, DEFAULT_TASK_SETTINGS);
+	assert.match(renamed, /今天吃药/);
+	assert.match(renamed, /item="item-medicine"/);
+	assert.match(renamed, /reminder="09:15"/);
+	assert.match(renamed, /group="group-health"/);
+});
+
+test('routine reminders show due state without treating skipped items as due', () => {
+	const parsed = parseRoutineInstances(
+		insertRoutineInstancesAtSlot('<!-- time-grid-routine-slot:start -->\n<!-- time-grid-routine-slot:end -->\n', routineDocument, '2026-08-03').content,
+		'Daily.md', '2026-08-03', routineDocument, '#goal'
+	);
+	const instance = parsed.instances.find((item) => item.itemId === 'item-medicine')!;
+	assert.equal(isRoutineReminderDue(instance, new Date(2026, 7, 3, 9, 0), '2026-08-03'), true);
+	assert.equal(reminderKey(instance), '2026-08-03:item-medicine');
+	instance.task.status = 'cancelled';
+	assert.equal(isRoutineReminderDue(instance, new Date(2026, 7, 3, 9, 0), '2026-08-03'), false);
+});
+
+test('duplicate and wrong-date routine instances remain visible but readonly', () => {
+	const generated = insertRoutineInstancesAtSlot('<!-- time-grid-routine-slot:start -->\n<!-- time-grid-routine-slot:end -->\n', routineDocument, '2026-08-03').content;
+	const medicine = generated.split('\n').find((line) => line.includes('item-medicine'))!;
+	const duplicated = generated.replace('<!-- time-grid-routine-instances:end -->', `${medicine.replace('吃药', '重复吃药')}\n<!-- time-grid-routine-instances:end -->`);
+	const duplicateParsed = parseRoutineInstances(duplicated, 'Daily.md', '2026-08-03', routineDocument, '#goal');
+	const duplicateItems = duplicateParsed.instances.filter((item) => item.itemId === 'item-medicine');
+	assert.equal(duplicateItems.length, 2);
+	assert.equal(duplicateItems.every((item) => getTaskWriteBlockReason(item.task)?.includes('实例 ID 重复')), true);
+	const wrongDate = generated.replace(/date="2026-08-03" item="item-medicine"/, 'date="2026-08-02" item="item-medicine"');
+	const wrongParsed = parseRoutineInstances(wrongDate, 'Daily.md', '2026-08-03', routineDocument, '#goal');
+	assert.match(getTaskWriteBlockReason(wrongParsed.instances.find((item) => item.itemId === 'item-medicine')!.task) ?? '', /日期/);
+});
+
+test('routine calendar uses the natural previous day across month and year boundaries', () => {
+	assert.equal(previousDateKey('2026-08-01'), '2026-07-31');
+	assert.equal(previousDateKey('2026-01-01'), '2025-12-31');
 });
 
 console.log(`\n${passed} task core tests passed.`);

@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"test": "node scripts/run-task-tests.mjs",
+		"test": "node scripts/run-task-tests.mjs && node scripts/run-routine-vault-tests.mjs",
 		"version": "node -e \"console.log(require('./package.json').version)\""
 	},
 	"keywords": [],
