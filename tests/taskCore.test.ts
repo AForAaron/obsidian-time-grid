@@ -8,7 +8,8 @@ import {
 } from '../src/utils/taskParser';
 import { DEFAULT_TASK_SETTINGS } from '../src/types/task';
 import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange, serializeTaskPatch, shiftDateKey } from '../src/utils/taskWriter';
-import { getEffectiveWritingDelta } from '../src/utils/writingStats';
+import { getEffectiveWritingDelta, normalizeTimeGridData } from '../src/utils/writingStats';
+import { countFilteredSections, createEmptyTaskFilters, filterTasks, groupFutureTasks, hasActiveTaskFilters } from '../src/utils/taskView';
 
 let passed = 0;
 
@@ -224,6 +225,68 @@ test('quick classification patches only due or long-term state', () => {
 		serializeTaskPatch(task, { goal: true }, DEFAULT_TASK_SETTINGS),
 		'- [ ] Inbox item #goal 🆔 keep'
 	);
+});
+
+test('task search matches description tags and source path case-insensitively', () => {
+	const tasks = [
+		parseTaskLine('- [ ] Prepare Launch #Work 📅 2026-08-02', 'Projects/Alpha.md', 0, '2026-08-01', '#goal'),
+		parseTaskLine('- [ ] 买牛奶 📅 2026-08-02', 'Personal/Home.md', 0, '2026-08-01', '#goal'),
+	];
+	const filters = createEmptyTaskFilters();
+	filters.query = 'launch';
+	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.filePath), ['Projects/Alpha.md']);
+	filters.query = '#WORK';
+	assert.equal(filterTasks(tasks, filters).length, 1);
+	filters.query = 'personal/home';
+	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.description), ['买牛奶']);
+});
+
+test('task filters use OR within a category and AND between categories', () => {
+	const tasks = [
+		parseTaskLine('- [ ] A ⏫ 📅 2026-08-01', 'One.md', 0, '2026-08-01', '#goal'),
+		parseTaskLine('- [/] B 🔽 📅 2026-08-01', 'One.md', 1, '2026-08-01', '#goal'),
+		parseTaskLine('- [/] C ⏫ 📅 2026-08-01', 'Two.md', 0, '2026-08-01', '#goal'),
+	];
+	const filters = createEmptyTaskFilters();
+	filters.statuses.add('todo');
+	filters.statuses.add('in-progress');
+	filters.priorities.add('high');
+	filters.sources.add('One.md');
+	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.description), ['A']);
+	filters.priorities.add('low');
+	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.description), ['A', 'B']);
+	assert.equal(hasActiveTaskFilters(filters), true);
+});
+
+test('filtered section counts retain matching and total values', () => {
+	const tasks = [
+		parseTaskLine('- [ ] Today A 📅 2026-08-01', 'One.md', 0, '2026-08-01', '#goal'),
+		parseTaskLine('- [ ] Today B 📅 2026-08-01', 'Two.md', 0, '2026-08-01', '#goal'),
+		parseTaskLine('- [ ] Future 📅 2026-08-02', 'One.md', 1, '2026-08-01', '#goal'),
+	];
+	const counts = countFilteredSections(tasks, [tasks[0]]);
+	assert.equal(counts.filtered.today, 1);
+	assert.equal(counts.total.today, 2);
+	assert.equal(counts.filtered.future ?? 0, 0);
+	assert.equal(counts.total.future, 1);
+});
+
+test('future tasks split into tomorrow seven-day and later groups', () => {
+	const tasks = [
+		parseTaskLine('- [ ] Tomorrow 📅 2026-08-02', 'One.md', 0, '2026-08-01', '#goal'),
+		parseTaskLine('- [ ] Soon 📅 2026-08-08', 'One.md', 1, '2026-08-01', '#goal'),
+		parseTaskLine('- [ ] Later 📅 2026-08-09', 'One.md', 2, '2026-08-01', '#goal'),
+	];
+	const groups = groupFutureTasks(tasks, '2026-08-01');
+	assert.deepEqual(groups.tomorrow.map((task) => task.description), ['Tomorrow']);
+	assert.deepEqual(groups.next7.map((task) => task.description), ['Soon']);
+	assert.deepEqual(groups.later.map((task) => task.description), ['Later']);
+});
+
+test('view state migration defaults old data to time and preserves a saved tasks mode', () => {
+	assert.equal(normalizeTimeGridData({}).uiState.activeMode, 'time');
+	assert.equal(normalizeTimeGridData({ uiState: { activeMode: 'tasks' } }).uiState.activeMode, 'tasks');
+	assert.equal(normalizeTimeGridData({ uiState: { activeMode: 'invalid' } }).uiState.activeMode, 'time');
 });
 
 console.log(`\n${passed} task core tests passed.`);

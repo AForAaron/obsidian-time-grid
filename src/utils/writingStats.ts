@@ -2,9 +2,11 @@ import { Plugin, TAbstractFile, TFile } from 'obsidian';
 import {
 	DEFAULT_TASK_PANEL_STATE,
 	DEFAULT_TASK_SETTINGS,
+	DEFAULT_TIME_GRID_UI_STATE,
 	DoneRange,
 	TaskPanelState,
 	TaskSettings,
+	TimeGridUiState,
 } from '../types/task';
 import { getDailyNoteFilename } from './dailyNotesParser';
 
@@ -17,6 +19,7 @@ export type TimeGridPluginData = {
 	writingStats: WritingStatsData;
 	taskSettings: TaskSettings;
 	taskPanelState: TaskPanelState;
+	uiState: TimeGridUiState;
 };
 
 export const DEFAULT_TIME_GRID_DATA: TimeGridPluginData = {
@@ -28,6 +31,7 @@ export const DEFAULT_TIME_GRID_DATA: TimeGridPluginData = {
 	taskPanelState: {
 		collapsed: { ...DEFAULT_TASK_PANEL_STATE.collapsed },
 	},
+	uiState: { ...DEFAULT_TIME_GRID_UI_STATE },
 };
 
 export const HEATMAP_RANGES = {
@@ -195,6 +199,9 @@ export function normalizeTimeGridData(raw: unknown): TimeGridPluginData {
 				...DEFAULT_TASK_PANEL_STATE.collapsed,
 				...(input.taskPanelState?.collapsed ?? {}),
 			},
+		},
+		uiState: {
+			activeMode: input.uiState?.activeMode === 'tasks' ? 'tasks' : 'time',
 		},
 	};
 }

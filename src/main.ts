@@ -37,6 +37,11 @@ export default class TimeGridPlugin extends Plugin {
 				async (state) => {
 					this.dataStore.taskPanelState = state;
 					await this.saveData(this.dataStore);
+				},
+				() => this.dataStore.uiState.activeMode,
+				async (activeMode) => {
+					this.dataStore.uiState.activeMode = activeMode;
+					await this.saveData(this.dataStore);
 				}
 			)
 		);
@@ -112,7 +117,7 @@ class TimeGridSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('启用任务面板')
-			.setDesc('在 Time Grid 底部显示全库任务。')
+			.setDesc('在 Time Grid 的任务视图中显示全库任务。')
 			.addToggle((toggle) => toggle.setValue(settings.enabled).onChange((value) => this.plugin.updateTaskSettings({ enabled: value })));
 		new Setting(containerEl)
 			.setName('排除路径')

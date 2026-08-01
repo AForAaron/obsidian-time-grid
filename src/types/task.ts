@@ -95,6 +95,12 @@ export interface TaskPanelState {
 	collapsed: Partial<Record<TaskSection, boolean>>;
 }
 
+export type TimeGridMode = 'time' | 'tasks';
+
+export interface TimeGridUiState {
+	activeMode: TimeGridMode;
+}
+
 export const DEFAULT_TASK_SETTINGS: TaskSettings = {
 	enabled: true,
 	excludedPaths: '00-Templates',
@@ -107,10 +113,15 @@ export const DEFAULT_TASK_SETTINGS: TaskSettings = {
 
 export const DEFAULT_TASK_PANEL_STATE: TaskPanelState = {
 	collapsed: {
-		goal: false,
+		unsorted: true,
+		goal: true,
 		future: true,
 		done: true,
 	},
+};
+
+export const DEFAULT_TIME_GRID_UI_STATE: TimeGridUiState = {
+	activeMode: 'time',
 };
 
 export type WriteFailReason =
