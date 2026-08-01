@@ -61,6 +61,21 @@ export class TaskWriter {
 		return this.applyEdit(task, newRaw);
 	}
 
+	async postponeTask(task: TGTask, days: number): Promise<WriteResult> {
+		const blocked = getTaskWriteBlockReason(task);
+		if (blocked) return this.fail(task, { ok: false, reason: 'read-only-task', message: blocked });
+		if (!task.due) {
+			return this.fail(task, { ok: false, reason: 'read-only-task', message: '没有到期日，无法顺延' });
+		}
+		return this.applyEdit(task, serializeTaskPatch(task, { due: shiftDateKey(task.due, days) }, this.getSettings()));
+	}
+
+	async deleteTask(task: TGTask): Promise<WriteResult> {
+		const blocked = getTaskWriteBlockReason(task);
+		if (blocked) return this.fail(task, { ok: false, reason: 'read-only-task', message: blocked });
+		return this.applyEdit(task, null);
+	}
+
 	private async applyEdit(task: TGTask, newRaw: string | null): Promise<WriteResult> {
 		const file = this.app.vault.getAbstractFileByPath(task.filePath);
 		if (!(file instanceof TFile)) {
@@ -214,6 +229,13 @@ export function applyTaskEditToContent(content: string, task: TGTask, newRaw: st
 	if (newRaw === null) deleteLine(lines, targetIndex);
 	else lines[targetIndex].text = newRaw;
 	return { content: lines.map((line) => line.text + line.ending).join(''), result: { ok: true } };
+}
+
+export function shiftDateKey(value: string, days: number): string {
+	const [year, month, day] = value.split('-').map(Number);
+	const date = new Date(Date.UTC(year, month - 1, day));
+	date.setUTCDate(date.getUTCDate() + days);
+	return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
 function statusChar(status: EditableTaskStatus): string {

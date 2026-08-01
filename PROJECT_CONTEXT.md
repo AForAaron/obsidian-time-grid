@@ -18,6 +18,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/components/DailyPieChart.ts`：今日 `simple-time-tracker` 计时分布圆环图，含默认空状态、进行中状态和状态说明
   - `src/components/TaskPanel.ts`：全库任务索引、六分区列表、四态管理、编辑入口、折叠状态与源文件跳转
   - `src/components/TaskEditModal.ts`：描述、到期日、优先级和长期标签编辑弹窗，含只读诊断与可复制错误
+  - `src/components/TaskDeleteConfirmModal.ts`：任务删除二次确认、目标原文预览与失败保留
 - 数据工具：
   - `src/utils/dailyNotes.ts`：打开或创建日记
   - `src/utils/dailyNotesParser.ts`：读取日记日期与 `simple-time-tracker` 数据
@@ -61,7 +62,8 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433。
 - 任务模块 Phase 2 已完成：四态菜单、完成/重新打开快捷按钮、终态日期、严格唯一定位、失败重扫和写作统计抑制已接入；异常、未知状态、循环和重复任务保持只读或拒写。
 - 任务模块 Phase 3 已完成：支持编辑描述、到期日、优先级和长期标签；失败时弹窗保持打开并提供可复制错误；只读任务只显示诊断和源文件入口。
-- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 25 个任务解析、状态转换、分区、排序、路径排除、字段级安全写回和统计抑制用例。
+- 任务模块 Phase 4 已完成：支持删除二次确认、顺延一天、Shift 顺延一周，以及待分类“设为今天/设为长期”；无到期日不显示顺延。
+- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 28 个任务解析、状态转换、分区、排序、路径排除、字段级安全写回、日期顺延、删除和统计抑制用例。
 
 ## 修改等级
 
@@ -151,3 +153,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/components/TaskEditModal.ts`、`src/components/TaskPanel.ts`、`src/utils/taskWriter.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`
 - 验证方式：`npm test` 25 项通过；`npm run build` 通过；专用临时 Git vault 累计完成 20 次真实写入，并验证四字段联合编辑、快捷日期不提交表单、重复原文拒写后弹窗保持打开且文件无变化。
 - 后续注意事项：Phase 4 继续复用同一 writer 定位路径；删除仅移除目标行，顺延只对有到期日任务显示，最终补做编辑器并发测试。
+
+### 2026-08-01（任务模块 Phase 4）
+
+- 修改等级：L3 跨模块改动
+- 变更摘要：新增删除二次确认、顺延一天/Shift 一周、待分类设为今天/长期和行级操作按钮；所有操作继续通过 `TaskWriter` 严格定位，删除只移除目标行。
+- 涉及文件：`src/components/TaskDeleteConfirmModal.ts`、`src/components/TaskEditModal.ts`、`src/components/TaskPanel.ts`、`src/utils/taskWriter.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`
+- 验证方式：`npm test` 28 项通过；`npm run build` 通过；专用临时 Git vault 验证顺延、二次确认删除、快速分类、相邻行保留，以及编辑器修改 Whiskey 与 Time Grid 顺延 Tango 的同文件并发写入，两份改动均保留。
+- 后续注意事项：最终仅向两个真实 vault 安装构建产物并做非破坏性冒烟检查；不得在真实 vault 触发任何任务写入。

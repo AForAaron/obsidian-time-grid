@@ -7,7 +7,7 @@ import {
 	sortTasks,
 } from '../src/utils/taskParser';
 import { DEFAULT_TASK_SETTINGS } from '../src/types/task';
-import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange, serializeTaskPatch } from '../src/utils/taskWriter';
+import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange, serializeTaskPatch, shiftDateKey } from '../src/utils/taskWriter';
 import { getEffectiveWritingDelta } from '../src/utils/writingStats';
 
 let passed = 0;
@@ -199,6 +199,31 @@ test('removing a long-term tag after opaque metadata preserves the remaining suf
 	const task = parseTaskLine('- [ ] Work 🆔 abc #goal', 'Inbox.md', 0, '2026-08-01', '#goal');
 	const raw = serializeTaskPatch(task, { goal: false }, DEFAULT_TASK_SETTINGS);
 	assert.equal(raw, '- [ ] Work 🆔 abc');
+});
+
+test('date shifting handles month year and leap-day boundaries', () => {
+	assert.equal(shiftDateKey('2026-08-31', 1), '2026-09-01');
+	assert.equal(shiftDateKey('2026-12-31', 7), '2027-01-07');
+	assert.equal(shiftDateKey('2028-02-28', 1), '2028-02-29');
+});
+
+test('deleting a parent task line keeps its child and adjacent content', () => {
+	const task = parseTaskLine('- [ ] Parent', 'Inbox.md', 1, '2026-08-01', '#goal');
+	const content = 'Heading\n- [ ] Parent\n  - [ ] Child\nTail\n';
+	const edit = applyTaskEditToContent(content, task, null);
+	assert.equal(edit.content, 'Heading\n  - [ ] Child\nTail\n');
+});
+
+test('quick classification patches only due or long-term state', () => {
+	const task = parseTaskLine('- [ ] Inbox item 🆔 keep', 'Inbox.md', 0, '2026-08-01', '#goal');
+	assert.equal(
+		serializeTaskPatch(task, { due: '2026-08-01' }, DEFAULT_TASK_SETTINGS),
+		'- [ ] Inbox item 🆔 keep 📅 2026-08-01'
+	);
+	assert.equal(
+		serializeTaskPatch(task, { goal: true }, DEFAULT_TASK_SETTINGS),
+		'- [ ] Inbox item #goal 🆔 keep'
+	);
 });
 
 console.log(`\n${passed} task core tests passed.`);

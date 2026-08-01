@@ -975,6 +975,7 @@
 
 .tg-task-meta {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: flex-end;
 	gap: 5px;
@@ -984,6 +985,58 @@
 	color: var(--tg-muted);
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
+}
+
+.tg-task-row-action,
+.tg-task-quick-action {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-muted);
+	cursor: pointer;
+}
+
+.tg-task-row-action {
+	width: 22px;
+	height: 22px;
+	padding: 3px;
+}
+
+.tg-task-row-action svg {
+	width: 13px;
+	height: 13px;
+}
+
+.tg-task-quick-action {
+	height: 22px;
+	padding: 2px 6px;
+	font-size: 10px;
+}
+
+.tg-task-row-action:hover,
+.tg-task-row-action:focus-visible,
+.tg-task-quick-action:hover,
+.tg-task-quick-action:focus-visible {
+	background: var(--background-modifier-hover);
+	color: var(--tg-text);
+}
+
+.tg-task-row-action.is-danger:hover,
+.tg-task-row-action.is-danger:focus-visible {
+	background: color-mix(in srgb, var(--background-modifier-error) 14%, transparent);
+	color: var(--text-error);
+}
+
+.tg-task-row-action:disabled,
+.tg-task-quick-action:disabled {
+	opacity: 0.45;
+	cursor: default;
 }
 
 .tg-task-due.is-overdue {
@@ -1183,6 +1236,16 @@
 
 .tg-task-modal-footer-spacer {
 	flex: 1;
+}
+
+.modal.tg-task-delete-modal {
+	width: min(500px, calc(100vw - 28px));
+}
+
+.tg-task-delete-warning {
+	color: var(--text-muted);
+	font-size: 12px;
+	line-height: 1.55;
 }
 
 @media (max-width: 500px) {

@@ -10,6 +10,7 @@ import {
 	WriteResult,
 } from '../types/task';
 import { TaskEditModal } from './TaskEditModal';
+import { TaskDeleteConfirmModal } from './TaskDeleteConfirmModal';
 import { TaskIndex } from '../utils/taskIndex';
 import { getTodayKey, sortTasks, terminalDate } from '../utils/taskParser';
 import { getTaskWriteBlockReason } from '../utils/taskWriter';
@@ -24,6 +25,8 @@ interface TaskPanelOptions {
 		toggleDone: (task: TGTask) => Promise<WriteResult>;
 		setStatus: (task: TGTask, status: EditableTaskStatus) => Promise<WriteResult>;
 		updateTask: (task: TGTask, patch: TaskPatch) => Promise<WriteResult>;
+		postponeTask: (task: TGTask, days: number) => Promise<WriteResult>;
+		deleteTask: (task: TGTask) => Promise<WriteResult>;
 	};
 }
 
@@ -49,6 +52,7 @@ export class TaskPanel {
 	};
 	private expandedSections = new Set<TaskSection>();
 	private pendingStatuses = new Map<string, EditableTaskStatus>();
+	private pendingTasks = new Set<string>();
 
 	constructor(parent: HTMLElement, app: App, index: TaskIndex, options: TaskPanelOptions) {
 		this.container = parent.createDiv('tg-module tg-task-panel');
@@ -153,8 +157,10 @@ export class TaskPanel {
 		const displayStatus: TaskStatusKind = optimisticStatus ?? task.status;
 		const blockReason = getTaskWriteBlockReason(task);
 		const row = parent.createDiv(`tg-task-row tg-task-status-${displayStatus}`);
+		row.setAttr('data-task-id', task.id);
+		const mutationPending = this.pendingTasks.has(task.id);
 		if (blockReason) row.addClass('is-read-only');
-		if (optimisticStatus) row.addClass('is-pending');
+		if (optimisticStatus || mutationPending) row.addClass('is-pending');
 
 		const status = row.createEl('button', {
 			cls: 'tg-task-status',
@@ -164,7 +170,7 @@ export class TaskPanel {
 			},
 		});
 		status.setText(statusGlyph(displayStatus, task.statusChar));
-		status.disabled = Boolean(blockReason || optimisticStatus || !this.options.actions);
+		status.disabled = Boolean(blockReason || optimisticStatus || mutationPending || !this.options.actions);
 		status.addEventListener('click', () => void this.runToggle(task));
 		const body = row.createDiv('tg-task-body');
 		const description = body.createEl('button', { cls: 'tg-task-description' });
@@ -199,8 +205,20 @@ export class TaskPanel {
 				select.createEl('option', { value, text: label });
 			}
 			select.value = displayStatus === 'unknown' ? 'todo' : displayStatus;
-			select.disabled = Boolean(blockReason || optimisticStatus);
+			select.disabled = Boolean(blockReason || optimisticStatus || mutationPending);
 			select.addEventListener('change', () => void this.runSetStatus(task, select.value as EditableTaskStatus));
+		}
+		if (this.options.actions && !blockReason) {
+			if (task.section === 'unsorted') {
+				this.createTextAction(meta, '今天', '设为今天', () => this.runMutation(task, () => this.options.actions!.updateTask(task, { due: getTodayKey() })));
+				this.createTextAction(meta, '长期', '设为长期任务', () => this.runMutation(task, () => this.options.actions!.updateTask(task, { goal: true })));
+			}
+			if (task.due) {
+				this.createIconAction(meta, 'calendar-plus', '顺延一天；按住 Shift 顺延一周', (event) =>
+					this.runMutation(task, () => this.options.actions!.postponeTask(task, event.shiftKey ? 7 : 1)));
+			}
+			this.createIconAction(meta, 'pencil', '编辑任务', () => { this.openEditor(task); });
+			this.createIconAction(meta, 'trash-2', '删除任务', () => { this.openDeleteConfirmation(task); }, 'is-danger');
 		}
 		if (task.hasRecurrence) {
 			meta.createSpan({ cls: 'tg-task-warning', text: '🔁', attr: { title: '循环任务只读' } });
@@ -238,8 +256,62 @@ export class TaskPanel {
 		new TaskEditModal(this.app, task, {
 			getSettings: this.options.getSettings,
 			save: (patch) => this.options.actions!.updateTask(task, patch),
+			deleteTask: () => this.runMutation(task, () => this.options.actions!.deleteTask(task)),
 			openSource: () => this.openSource(task),
 		}).open();
+	}
+
+	private openDeleteConfirmation(task: TGTask): void {
+		if (!this.options.actions) return;
+		new TaskDeleteConfirmModal(this.app, task, {
+			confirm: () => this.runMutation(task, () => this.options.actions!.deleteTask(task)),
+			openSource: () => this.openSource(task),
+		}).open();
+	}
+
+	private createIconAction(
+		parent: HTMLElement,
+		icon: string,
+		label: string,
+		action: (event: MouseEvent) => void | Promise<unknown>,
+		cls = ''
+	): void {
+		const button = parent.createEl('button', {
+			cls: `tg-task-row-action ${cls}`.trim(),
+			attr: { 'aria-label': label, title: label },
+		});
+		setIcon(button, icon);
+		button.disabled = this.pendingTasks.has(this.taskIdFromRow(parent));
+		button.addEventListener('click', (event) => void action(event));
+	}
+
+	private createTextAction(parent: HTMLElement, text: string, label: string, action: () => Promise<unknown>): void {
+		const button = parent.createEl('button', {
+			cls: 'tg-task-quick-action',
+			text,
+			attr: { 'aria-label': label, title: label },
+		});
+		button.disabled = this.pendingTasks.has(this.taskIdFromRow(parent));
+		button.addEventListener('click', () => void action());
+	}
+
+	private taskIdFromRow(parent: HTMLElement): string {
+		const row = parent.closest('.tg-task-row');
+		return row?.getAttr('data-task-id') ?? '';
+	}
+
+	private async runMutation(task: TGTask, action: () => Promise<WriteResult>): Promise<WriteResult> {
+		if (this.pendingTasks.has(task.id)) {
+			return { ok: false, reason: 'io-error', message: '任务操作正在进行，请稍候' };
+		}
+		this.pendingTasks.add(task.id);
+		this.render();
+		try {
+			return await action();
+		} finally {
+			this.pendingTasks.delete(task.id);
+			this.render();
+		}
 	}
 
 	private isCollapsed(section: TaskSection): boolean {

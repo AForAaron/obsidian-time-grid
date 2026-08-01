@@ -2,10 +2,12 @@ import { App, Modal, setIcon } from 'obsidian';
 import { TaskPatch, TaskPriority, TaskSettings, TGTask, WriteResult } from '../types/task';
 import { getTodayKey } from '../utils/taskParser';
 import { getTaskWriteBlockReason } from '../utils/taskWriter';
+import { TaskDeleteConfirmModal } from './TaskDeleteConfirmModal';
 
 interface TaskEditModalOptions {
 	getSettings: () => TaskSettings;
 	save: (patch: TaskPatch) => Promise<WriteResult>;
+	deleteTask: () => Promise<WriteResult>;
 	openSource: () => Promise<void>;
 }
 
@@ -94,6 +96,8 @@ export class TaskEditModal extends Modal {
 		this.errorEl = form.createDiv({ cls: 'tg-task-modal-error is-hidden', attr: { role: 'alert' } });
 
 		const footer = form.createDiv('tg-task-modal-footer');
+		const deleteButton = footer.createEl('button', { cls: 'mod-warning', text: '删除', attr: { type: 'button' } });
+		deleteButton.addEventListener('click', () => this.openDeleteConfirmation());
 		const source = footer.createEl('button', { text: '打开源文件', attr: { type: 'button' } });
 		source.addEventListener('click', () => void this.openSourceAndClose());
 		const spacer = footer.createDiv('tg-task-modal-footer-spacer');
@@ -167,6 +171,14 @@ export class TaskEditModal extends Modal {
 	private async openSourceAndClose(): Promise<void> {
 		this.close();
 		await this.options.openSource();
+	}
+
+	private openDeleteConfirmation(): void {
+		this.close();
+		new TaskDeleteConfirmModal(this.app, this.task, {
+			confirm: this.options.deleteTask,
+			openSource: this.options.openSource,
+		}).open();
 	}
 }
 
