@@ -16,7 +16,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/components/DayGrid.ts`：24 小时网格
   - `src/components/HourGrid.ts`：当前小时 60 分钟网格
   - `src/components/DailyPieChart.ts`：今日 `simple-time-tracker` 计时分布圆环图，含默认空状态、进行中状态和状态说明
-  - `src/components/TaskPanel.ts`：独立任务中心、统计卡片、即时搜索、组合筛选、六分区卡片、四态菜单、悬停预览、触屏展开与源文件跳转
+  - `src/components/TaskPanel.ts`：独立任务中心、统计卡片、即时搜索、统一筛选浮层、六分区卡片、自定义四态/更多菜单、悬停预览、触屏展开与源文件跳转
   - `src/components/TaskEditModal.ts`：描述、到期日、优先级和长期标签编辑弹窗，含只读诊断与可复制错误
   - `src/components/TaskDeleteConfirmModal.ts`：任务删除二次确认、目标原文预览与失败保留
 - 数据工具：
@@ -28,6 +28,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/utils/taskIndex.ts`：基于 metadataCache 的全量与增量任务索引
   - `src/utils/taskWriter.ts`：基于 `Vault.process()` 的任务严格定位、状态序列化与原子写回
   - `src/utils/taskView.ts`：任务搜索、状态/优先级/来源组合筛选、分区计数与未来时间分组纯函数
+  - `src/utils/taskUi.ts`：任务浮层碰撞定位、菜单操作可用性与每日流程展示进度纯函数
 - 样式入口：`src/styles/main.css`
 - 构建配置：`esbuild.config.mjs`
 - 插件清单：`manifest.json`
@@ -43,6 +44,8 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 任务模块使用 `metadataCache.listItems` 定位任务，扫描期间异步分批；所有任务写入只经过 `TaskWriter` 和 `Vault.process()`。
 - 任务中心按逾期、今天、待分类、长期、未来、已结束六区展示；未来细分明天、7 天内和更晚，完成与取消合并为已结束并保留状态区分；异常、未知状态和循环任务仍显示并标注只读。
 - 任务搜索覆盖描述、标签和文件路径；状态、优先级、来源类别之间使用 AND，同类选项使用 OR。搜索、筛选和触屏展开仅保留在当前会话。
+- 任务菜单、筛选和完整预览统一使用 `document.body` portal 层，并在外部点击、滚动、Esc、窗口失焦时关闭；菜单行为继续调用既有任务操作接口。
+- “每日流程”当前只有可选展示模型和设计原型；生产数据源不提供该模型，因此空卡不会出现，也没有识别、去重、统计或 Markdown 写回。
 - 写入前要求目标原文在文件中全局唯一；找不到、重复、循环、异常和未知状态任务拒绝写入并重新索引。
 - 任务状态固定为待办、进行中、完成、取消；可选记录完成或取消的终态日期，重新打开时移除终态日期。
 - 使用现有 Node、TypeScript 和 esbuild 测试脚本；修改后至少运行 `npm test` 与 `npm run build`。
@@ -59,14 +62,14 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 今日计时分布已完成新版本：圆环图、中心总时长、空状态、格式异常状态、进行中状态、任务配色、Top 5 + 其他合并和图例悬停联动已实现。
 - 计时统计边界已修正：`simple-time-tracker` 时长会按当前日期边界裁剪，避免跨日记录影响单日统计。
 - 写作增量统计已具备：插件启用后为全库 Markdown 建立字数基线，并按日期记录新增字数。
-- 最新构建/安装状态：任务模块 Phase 1–4 的安全写回保持不变；任务中心 UI 重设计已通过 33 项自动测试、生产打包、深浅主题和真实 Obsidian 只读视觉冒烟，最新构建已同步到 Aaron_Ob 与临时测试 vault。
+- 最新构建/安装状态：任务模块 Phase 1–4 的安全写回保持不变；全界面设计系统已通过 38 项自动测试、生产打包、280/420/720px 深浅主题原型检查和真实 Obsidian 只读视觉冒烟，最新构建已同步到 Aaron_Ob 与临时测试 vault。
 - 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433。
 - 任务模块 Phase 2 已完成：四态菜单、完成/重新打开快捷按钮、终态日期、严格唯一定位、失败重扫和写作统计抑制已接入；异常、未知状态、循环和重复任务保持只读或拒写。
 - 任务模块 Phase 3 已完成：支持编辑描述、到期日、优先级和长期标签；失败时弹窗保持打开并提供可复制错误；只读任务只显示诊断和源文件入口。
 - 任务模块 Phase 4 已完成：支持删除二次确认、顺延一天、Shift 顺延一周，以及待分类“设为今天/设为长期”；无到期日不显示顺延。
-- 任务中心 UI 重设计已完成：顶部双视图切换、最后视图持久化、四统计卡、即时搜索、状态/优先级/来源组合筛选、过滤计数、未来三组、已结束合并、桌面完整浮层、触屏行内展开、状态菜单和更多操作菜单均已接入。
+- 任务中心 UI 重设计已完成：顶部双视图切换、最后视图持久化、四统计卡、即时搜索、状态/优先级/来源组合筛选、过滤计数、未来三组、已结束合并、桌面完整浮层、触屏行内展开，以及统一 portal 状态菜单、更多菜单和筛选浮层均已接入。
 - 响应式样式使用任务视图容器查询，覆盖 `≤320px`、`321–520px`、`>520px`；极窄侧栏固定 2×2 统计与收口筛选，不再常驻编辑、顺延、删除按钮，深色与浅色均使用 Obsidian 主题变量和 `color-mix`。
-- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 33 个任务解析、状态转换、分区、排序、路径排除、安全写回、搜索、组合筛选、过滤计数、未来分组、视图迁移和统计抑制用例。
+- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 38 个任务解析、状态转换、分区、排序、路径排除、安全写回、搜索、组合筛选、过滤计数、未来分组、视图迁移、统计抑制、浮层定位、只读菜单限制和每日流程进度用例。
 
 ## 修改等级
 
@@ -180,3 +183,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`esbuild.config.mjs`、`src/components/TaskPanel.ts`、`src/main.ts`、`src/styles/main.css`、`src/types/task.ts`、`src/utils/taskView.ts`、`src/utils/writingStats.ts`、`src/views/TimeGridView.ts`、`tests/taskCore.test.ts`
 - 验证方式：`npm test` 33 项通过；`npm run build`、`git diff --check` 通过；临时 vault 在 Obsidian 1.12.7 中验证深色、浅色、只读任务和极窄侧栏；Aaron_Ob 以 628 条实时任务完成模式记忆、2×2 统计、搜索 `1 / 18` 分区计数和无写回冒烟。
 - 后续注意事项：本轮没有修改 `TaskWriter`、Markdown 定位或原子写回规则，也没有加入新建任务、批量操作或循环任务编辑；最终分支需由用户审阅并合并到 `main`。
+
+### 2026-08-01（全界面设计系统落地）
+
+- 修改等级：L3 跨模块改动
+- 变更摘要：将 `Time Grid Design System/` 纳入视觉真相源并修复交互原型；在生产 CSS 建立 Obsidian 主题 token 桥接，统一双视图、时间模块、任务中心和任务弹窗；以共享 portal 生命周期替换状态、更多操作和筛选原生浮层；新增每日流程可选展示模型，但不接入生产数据。
+- 涉及文件：`.gitignore`、`Time Grid Design System/`、`src/components/TaskPanel.ts`、`src/components/TaskEditModal.ts`、`src/components/TaskDeleteConfirmModal.ts`、`src/styles/main.css`、`src/types/task.ts`、`src/utils/taskUi.ts`、`tests/taskCore.test.ts`
+- 验证方式：`npm test` 38 项通过；`npm run build`、`git diff --check` 通过；设计原型完成 280/420/720px、深浅主题和桌面/触屏状态检查；Aaron_Ob 以 628 条实时任务验证 2×2 统计、单一筛选入口、筛选 portal、更多菜单和 Esc 关闭，全程未触发任务写回。
+- 后续注意事项：`TaskWriter`、Markdown 定位和 `Vault.process()` 未改变；每日流程实际识别、历史排除、统计和写回留待下一阶段；最终分支由用户审阅后合并到 `main`。

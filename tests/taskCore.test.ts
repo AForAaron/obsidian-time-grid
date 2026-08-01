@@ -10,6 +10,7 @@ import { DEFAULT_TASK_SETTINGS } from '../src/types/task';
 import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange, serializeTaskPatch, shiftDateKey } from '../src/utils/taskWriter';
 import { getEffectiveWritingDelta, normalizeTimeGridData } from '../src/utils/writingStats';
 import { countFilteredSections, createEmptyTaskFilters, filterTasks, groupFutureTasks, hasActiveTaskFilters } from '../src/utils/taskView';
+import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer } from '../src/utils/taskUi';
 
 let passed = 0;
 
@@ -287,6 +288,62 @@ test('view state migration defaults old data to time and preserves a saved tasks
 	assert.equal(normalizeTimeGridData({}).uiState.activeMode, 'time');
 	assert.equal(normalizeTimeGridData({ uiState: { activeMode: 'tasks' } }).uiState.activeMode, 'tasks');
 	assert.equal(normalizeTimeGridData({ uiState: { activeMode: 'invalid' } }).uiState.activeMode, 'time');
+});
+
+test('floating layers prefer the requested side when it fits', () => {
+	const position = positionFloatingLayer(
+		{ left: 100, top: 80, right: 160, bottom: 110, width: 60, height: 30 },
+		{ width: 180, height: 120 },
+		{ width: 800, height: 600 },
+		'right'
+	);
+	assert.deepEqual(position, { left: 166, top: 80, placement: 'right' });
+});
+
+test('floating layers flip and remain inside viewport margins', () => {
+	const flipped = positionFloatingLayer(
+		{ left: 740, top: 540, right: 790, bottom: 580, width: 50, height: 40 },
+		{ width: 220, height: 180 },
+		{ width: 800, height: 600 },
+		'bottom'
+	);
+	assert.equal(flipped.placement, 'top');
+	assert.equal(flipped.left, 570);
+	assert.equal(flipped.top, 354);
+	const oversized = positionFloatingLayer(
+		{ left: 2, top: 2, right: 20, bottom: 20, width: 18, height: 18 },
+		{ width: 500, height: 500 },
+		{ width: 320, height: 240 },
+		'right'
+	);
+	assert.equal(oversized.left, 10);
+	assert.equal(oversized.top, 10);
+});
+
+test('task menus expose only safe actions for readonly tasks', () => {
+	const readonly = parseTaskLine('- [ ] Loop 🔁 every day', 'Daily.md', 0, '2026-08-01', '#goal');
+	assert.deepEqual(getTaskMenuActions(readonly, false), ['show-readonly-reason', 'open-source']);
+});
+
+test('task menus vary scheduling actions by task shape', () => {
+	const dated = parseTaskLine('- [ ] Dated 📅 2026-08-01', 'Daily.md', 0, '2026-08-01', '#goal');
+	const inbox = parseTaskLine('- [ ] Inbox', 'Inbox.md', 0, '2026-08-01', '#goal');
+	assert.deepEqual(getTaskMenuActions(dated, true), ['edit', 'postpone-day', 'postpone-week', 'open-source', 'delete']);
+	assert.deepEqual(getTaskMenuActions(inbox, true), ['edit', 'set-today', 'set-long-term', 'open-source', 'delete']);
+});
+
+test('routine progress hides empty models and counts completed items', () => {
+	assert.equal(getRoutineProgress(undefined), null);
+	assert.equal(getRoutineProgress({ id: 'daily', title: '每日流程', items: [] }), null);
+	assert.deepEqual(getRoutineProgress({
+		id: 'daily',
+		title: '每日流程',
+		items: [
+			{ id: 'a', title: 'A', done: true },
+			{ id: 'b', title: 'B', done: false },
+			{ id: 'c', title: 'C', done: true },
+		],
+	}), { completed: 2, total: 3 });
 });
 
 console.log(`\n${passed} task core tests passed.`);
