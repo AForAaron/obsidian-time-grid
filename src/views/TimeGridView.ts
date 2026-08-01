@@ -8,6 +8,7 @@ import { TaskPanel } from '../components/TaskPanel';
 import { TaskPanelState, TaskSettings } from '../types/task';
 import { openOrCreateDailyNoteForDate, openOrCreateTodayDailyNote } from '../utils/dailyNotes';
 import { TaskIndex } from '../utils/taskIndex';
+import { TaskWriter } from '../utils/taskWriter';
 import { WritingStatsTracker } from '../utils/writingStats';
 
 export const TIME_GRID_VIEW = 'time-grid-view';
@@ -21,6 +22,7 @@ export class TimeGridView extends ItemView {
 	private dailyPieChart: DailyPieChart;
 	private taskPanel: TaskPanel;
 	private taskIndex: TaskIndex;
+	private taskWriter: TaskWriter;
 	private getTaskSettings: () => TaskSettings;
 	private getTaskPanelState: () => TaskPanelState;
 	private saveTaskPanelState: (state: TaskPanelState) => Promise<void>;
@@ -30,6 +32,7 @@ export class TimeGridView extends ItemView {
 		leaf: WorkspaceLeaf,
 		writingStats: WritingStatsTracker,
 		taskIndex: TaskIndex,
+		taskWriter: TaskWriter,
 		getTaskSettings: () => TaskSettings,
 		getTaskPanelState: () => TaskPanelState,
 		saveTaskPanelState: (state: TaskPanelState) => Promise<void>
@@ -37,6 +40,7 @@ export class TimeGridView extends ItemView {
 		super(leaf);
 		this.writingStats = writingStats;
 		this.taskIndex = taskIndex;
+		this.taskWriter = taskWriter;
 		this.getTaskSettings = getTaskSettings;
 		this.getTaskPanelState = getTaskPanelState;
 		this.saveTaskPanelState = saveTaskPanelState;
@@ -78,6 +82,10 @@ export class TimeGridView extends ItemView {
 			getSettings: this.getTaskSettings,
 			getState: this.getTaskPanelState,
 			saveState: this.saveTaskPanelState,
+			actions: {
+				toggleDone: (task) => this.taskWriter.toggleDone(task),
+				setStatus: (task, status) => this.taskWriter.setStatus(task, status),
+			},
 		});
 
 		// 每秒更新一次（节流到 1 秒，降低内存占用）

@@ -2,12 +2,14 @@ import { Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 import { TimeGridView, TIME_GRID_VIEW } from './views/TimeGridView';
 import { TaskSettings } from './types/task';
 import { TaskIndex } from './utils/taskIndex';
+import { TaskWriter } from './utils/taskWriter';
 import { normalizeTimeGridData, TimeGridPluginData, WritingStatsTracker } from './utils/writingStats';
 
 export default class TimeGridPlugin extends Plugin {
 	private dataStore: TimeGridPluginData;
 	private writingStats: WritingStatsTracker;
 	private taskIndex: TaskIndex;
+	private taskWriter: TaskWriter;
 	private metadataResolvedHandled = false;
 
 	async onload() {
@@ -18,6 +20,7 @@ export default class TimeGridPlugin extends Plugin {
 		this.writingStats.registerEvents();
 		void this.writingStats.initializeBaselines();
 		this.taskIndex = new TaskIndex(this.app, () => this.dataStore.taskSettings);
+		this.taskWriter = new TaskWriter(this.app, this.taskIndex, () => this.dataStore.taskSettings, this.writingStats);
 		this.registerTaskIndexEvents();
 		this.addSettingTab(new TimeGridSettingTab(this.app, this));
 
@@ -28,6 +31,7 @@ export default class TimeGridPlugin extends Plugin {
 				leaf,
 				this.writingStats,
 				this.taskIndex,
+				this.taskWriter,
 				() => this.dataStore.taskSettings,
 				() => this.dataStore.taskPanelState,
 				async (state) => {
@@ -124,6 +128,10 @@ class TimeGridSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName('显示任务所在文件名')
 			.addToggle((toggle) => toggle.setValue(settings.showFileName).onChange((value) => this.plugin.updateTaskSettings({ showFileName: value })));
+		new Setting(containerEl)
+			.setName('记录终态日期')
+			.setDesc('完成时写入 ✅ 日期，取消时写入 ❌ 日期；重新打开时移除。')
+			.addToggle((toggle) => toggle.setValue(settings.recordTerminalDate).onChange((value) => this.plugin.updateTaskSettings({ recordTerminalDate: value })));
 		new Setting(containerEl)
 			.setName('已完成区显示范围')
 			.addDropdown((dropdown) => dropdown

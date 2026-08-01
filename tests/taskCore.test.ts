@@ -6,6 +6,9 @@ import {
 	parseTaskLine,
 	sortTasks,
 } from '../src/utils/taskParser';
+import { DEFAULT_TASK_SETTINGS } from '../src/types/task';
+import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange } from '../src/utils/taskWriter';
+import { getEffectiveWritingDelta } from '../src/utils/writingStats';
 
 let passed = 0;
 
@@ -85,6 +88,88 @@ test('sorts today tasks by priority descending', () => {
 	const low = parseTaskLine('- [ ] 低 🔽 📅 2026-08-01', 'B.md', 0, '2026-08-01', '#goal');
 	const high = parseTaskLine('- [ ] 高 ⏫ 📅 2026-08-01', 'A.md', 0, '2026-08-01', '#goal');
 	assert.deepEqual(sortTasks('today', [low, high]).map((task) => task.description), ['高', '低']);
+});
+
+test('serializes terminal status and normalizes missing metadata spacing', () => {
+	const task = parseTaskLine('- [ ] 写论文📅 2026-08-05 🆔 abc', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const raw = serializeStatusChange(task, 'done', DEFAULT_TASK_SETTINGS, '2026-08-01');
+	assert.equal(raw, '- [x] 写论文 📅 2026-08-05 🆔 abc ✅ 2026-08-01');
+});
+
+test('switching to cancelled replaces done metadata and reopening removes terminal dates', () => {
+	const done = parseTaskLine('- [x] 完成了 📅 2026-08-05 ✅ 2026-07-31', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const cancelledRaw = serializeStatusChange(done, 'cancelled', DEFAULT_TASK_SETTINGS, '2026-08-01');
+	assert.equal(cancelledRaw, '- [-] 完成了 📅 2026-08-05 ❌ 2026-08-01');
+	const cancelled = parseTaskLine(cancelledRaw, 'Inbox.md', 0, '2026-08-01', '#goal');
+	assert.equal(serializeStatusChange(cancelled, 'todo', DEFAULT_TASK_SETTINGS, '2026-08-01'), '- [ ] 完成了 📅 2026-08-05');
+});
+
+test('content editing preserves CRLF, BOM and final newline', () => {
+	const content = '\uFEFF# Inbox\r\n- [ ] Alpha\r\nTail\r\n';
+	const task = parseTaskLine('- [ ] Alpha', 'Inbox.md', 1, '2026-08-01', '#goal');
+	const edit = applyTaskEditToContent(content, task, '- [x] Alpha ✅ 2026-08-01');
+	assert.equal(edit.result.ok, true);
+	assert.equal(edit.content, '\uFEFF# Inbox\r\n- [x] Alpha ✅ 2026-08-01\r\nTail\r\n');
+});
+
+test('line drift uses the unique exact raw match', () => {
+	const task = parseTaskLine('- [ ] Alpha', 'Inbox.md', 8, '2026-08-01', '#goal');
+	const edit = applyTaskEditToContent('Heading\n- [ ] Alpha\n', task, '- [x] Alpha');
+	assert.deepEqual(edit, { content: 'Heading\n- [x] Alpha\n', result: { ok: true } });
+});
+
+test('duplicate raw tasks are always rejected even when the original line still matches', () => {
+	const task = parseTaskLine('- [ ] Same', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const content = '- [ ] Same\n- [ ] Same\n';
+	const edit = applyTaskEditToContent(content, task, '- [x] Same');
+	assert.equal(edit.result.ok, false);
+	if (!edit.result.ok) assert.equal(edit.result.reason, 'line-mismatch-ambiguous');
+	assert.equal(edit.content, content);
+});
+
+test('deleting a final line preserves the absence of a terminal newline', () => {
+	const task = parseTaskLine('- [ ] Last', 'Inbox.md', 1, '2026-08-01', '#goal');
+	const edit = applyTaskEditToContent('First\n- [ ] Last', task, null);
+	assert.equal(edit.content, 'First');
+});
+
+test('record-terminal-date off changes only the checkbox and removes terminal dates', () => {
+	const task = parseTaskLine('- [x] Alpha ✅ 2026-07-31 🆔 keep', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const settings = { ...DEFAULT_TASK_SETTINGS, recordTerminalDate: false };
+	assert.equal(serializeStatusChange(task, 'cancelled', settings, '2026-08-01'), '- [-] Alpha 🆔 keep');
+});
+
+test('recurring and malformed tasks expose blocking write reasons', () => {
+	const recurring = parseTaskLine('- [ ] Repeat 🔁 every day 📅 2026-08-01', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const malformed = parseTaskLine('- [ ] Invalid 📅 2026-13-01', 'Inbox.md', 1, '2026-08-01', '#goal');
+	assert.match(getTaskWriteBlockReason(recurring) ?? '', /循环任务/);
+	assert.match(getTaskWriteBlockReason(malformed) ?? '', /日期无效/);
+});
+
+test('not-found edits return the original content unchanged', () => {
+	const task = parseTaskLine('- [ ] Missing', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const content = '- [ ] Present\n';
+	const edit = applyTaskEditToContent(content, task, '- [x] Missing');
+	assert.equal(edit.result.ok, false);
+	if (!edit.result.ok) assert.equal(edit.result.reason, 'line-mismatch-not-found');
+	assert.equal(edit.content, content);
+});
+
+test('deleting a middle line preserves adjacent lines and separators', () => {
+	const task = parseTaskLine('- [ ] Middle', 'Inbox.md', 1, '2026-08-01', '#goal');
+	const edit = applyTaskEditToContent('First\r\n- [ ] Middle\r\nLast\r\n', task, null);
+	assert.equal(edit.content, 'First\r\nLast\r\n');
+});
+
+test('status edits preserve unknown metadata ordering and text', () => {
+	const task = parseTaskLine('- [/] Work 🆔 abc custom-tail ⛔ dep 📅 2026-08-02', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const raw = serializeStatusChange(task, 'done', DEFAULT_TASK_SETTINGS, '2026-08-01');
+	assert.equal(raw, '- [x] Work 🆔 abc custom-tail ⛔ dep 📅 2026-08-02 ✅ 2026-08-01');
+});
+
+test('task-write suppression preserves concurrent external writing deltas', () => {
+	assert.equal(getEffectiveWritingDelta(6, 1), 5);
+	assert.equal(getEffectiveWritingDelta(-3, -1), -2);
 });
 
 console.log(`\n${passed} task core tests passed.`);

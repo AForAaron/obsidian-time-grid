@@ -1,7 +1,16 @@
 import { App, MarkdownView, setIcon, TFile } from 'obsidian';
-import { TaskPanelState, TaskSection, TaskSettings, TGTask } from '../types/task';
+import {
+	EditableTaskStatus,
+	TaskPanelState,
+	TaskSection,
+	TaskSettings,
+	TaskStatusKind,
+	TGTask,
+	WriteResult,
+} from '../types/task';
 import { TaskIndex } from '../utils/taskIndex';
 import { getTodayKey, sortTasks, terminalDate } from '../utils/taskParser';
+import { getTaskWriteBlockReason } from '../utils/taskWriter';
 
 type PersistedSection = 'goal' | 'future' | 'done';
 
@@ -9,6 +18,10 @@ interface TaskPanelOptions {
 	getSettings: () => TaskSettings;
 	getState: () => TaskPanelState;
 	saveState: (state: TaskPanelState) => Promise<void>;
+	actions?: {
+		toggleDone: (task: TGTask) => Promise<WriteResult>;
+		setStatus: (task: TGTask, status: EditableTaskStatus) => Promise<WriteResult>;
+	};
 }
 
 const SECTION_CONFIG: Array<{ section: TaskSection; icon: string; label: string }> = [
@@ -32,6 +45,7 @@ export class TaskPanel {
 		unsorted: false,
 	};
 	private expandedSections = new Set<TaskSection>();
+	private pendingStatuses = new Map<string, EditableTaskStatus>();
 
 	constructor(parent: HTMLElement, app: App, index: TaskIndex, options: TaskPanelOptions) {
 		this.container = parent.createDiv('tg-module tg-task-panel');
@@ -132,11 +146,23 @@ export class TaskPanel {
 	}
 
 	private renderTaskRow(parent: HTMLElement, task: TGTask): void {
-		const row = parent.createDiv(`tg-task-row tg-task-status-${task.status}`);
-		if (task.diagnostics.some((item) => item.blocking) || task.hasRecurrence) row.addClass('is-read-only');
+		const optimisticStatus = this.pendingStatuses.get(task.id);
+		const displayStatus: TaskStatusKind = optimisticStatus ?? task.status;
+		const blockReason = getTaskWriteBlockReason(task);
+		const row = parent.createDiv(`tg-task-row tg-task-status-${displayStatus}`);
+		if (blockReason) row.addClass('is-read-only');
+		if (optimisticStatus) row.addClass('is-pending');
 
-		const status = row.createSpan({ cls: 'tg-task-status', attr: { 'aria-hidden': 'true' } });
-		status.setText(statusGlyph(task));
+		const status = row.createEl('button', {
+			cls: 'tg-task-status',
+			attr: {
+				'aria-label': `${displayStatus === 'done' || displayStatus === 'cancelled' ? '重新打开任务' : '完成任务'} ${task.description || task.raw.trim()}`,
+				title: blockReason ?? '点击完成或重新打开',
+			},
+		});
+		status.setText(statusGlyph(displayStatus, task.statusChar));
+		status.disabled = Boolean(blockReason || optimisticStatus || !this.options.actions);
+		status.addEventListener('click', () => void this.runToggle(task));
 		const body = row.createDiv('tg-task-body');
 		const description = body.createEl('button', { cls: 'tg-task-description' });
 		description.setText(task.description || task.raw.trim());
@@ -152,6 +178,23 @@ export class TaskPanel {
 			if (task.section === 'overdue') due.addClass('is-overdue');
 		}
 		if (task.priority) meta.createSpan({ cls: 'tg-task-priority', text: priorityGlyph(task.priority) });
+		if (this.options.actions) {
+			const select = meta.createEl('select', {
+				cls: 'tg-task-status-select',
+				attr: { 'aria-label': `设置任务状态：${task.description || task.raw.trim()}`, title: blockReason ?? '设置任务状态' },
+			});
+			for (const [value, label] of [
+				['todo', '待办'],
+				['in-progress', '进行中'],
+				['done', '完成'],
+				['cancelled', '取消'],
+			] as Array<[EditableTaskStatus, string]>) {
+				select.createEl('option', { value, text: label });
+			}
+			select.value = displayStatus === 'unknown' ? 'todo' : displayStatus;
+			select.disabled = Boolean(blockReason || optimisticStatus);
+			select.addEventListener('change', () => void this.runSetStatus(task, select.value as EditableTaskStatus));
+		}
 		if (task.hasRecurrence) {
 			meta.createSpan({ cls: 'tg-task-warning', text: '🔁', attr: { title: '循环任务只读' } });
 		}
@@ -159,6 +202,25 @@ export class TaskPanel {
 		if (diagnostic) {
 			meta.createSpan({ cls: 'tg-task-warning', text: '⚠', attr: { title: diagnostic.message } });
 		}
+	}
+
+	private async runToggle(task: TGTask): Promise<void> {
+		if (!this.options.actions || this.pendingStatuses.has(task.id)) return;
+		const next: EditableTaskStatus = task.status === 'done' || task.status === 'cancelled' ? 'todo' : 'done';
+		this.pendingStatuses.set(task.id, next);
+		this.render();
+		await this.options.actions.toggleDone(task);
+		this.pendingStatuses.delete(task.id);
+		this.render();
+	}
+
+	private async runSetStatus(task: TGTask, status: EditableTaskStatus): Promise<void> {
+		if (!this.options.actions || this.pendingStatuses.has(task.id) || status === task.status) return;
+		this.pendingStatuses.set(task.id, status);
+		this.render();
+		await this.options.actions.setStatus(task, status);
+		this.pendingStatuses.delete(task.id);
+		this.render();
 	}
 
 	private isCollapsed(section: TaskSection): boolean {
@@ -219,13 +281,13 @@ function offsetDate(date: Date, days: number): Date {
 	return copy;
 }
 
-function statusGlyph(task: TGTask): string {
-	switch (task.status) {
+function statusGlyph(status: TaskStatusKind, originalChar: string): string {
+	switch (status) {
 		case 'todo': return '☐';
 		case 'in-progress': return '◐';
 		case 'done': return '☑';
 		case 'cancelled': return '⊘';
-		case 'unknown': return `[${task.statusChar}]`;
+		case 'unknown': return `[${originalChar}]`;
 	}
 }
 

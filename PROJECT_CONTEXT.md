@@ -16,7 +16,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/components/DayGrid.ts`：24 小时网格
   - `src/components/HourGrid.ts`：当前小时 60 分钟网格
   - `src/components/DailyPieChart.ts`：今日 `simple-time-tracker` 计时分布圆环图，含默认空状态、进行中状态和状态说明
-  - `src/components/TaskPanel.ts`：全库任务只读索引、六分区列表、折叠状态与源文件跳转
+  - `src/components/TaskPanel.ts`：全库任务索引、六分区列表、四态管理、折叠状态与源文件跳转
 - 数据工具：
   - `src/utils/dailyNotes.ts`：打开或创建日记
   - `src/utils/dailyNotesParser.ts`：读取日记日期与 `simple-time-tracker` 数据
@@ -24,6 +24,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/utils/icons.ts`：图标工具
   - `src/utils/taskParser.ts`：Tasks emoji 语法解析、状态语义、分区与排序纯函数
   - `src/utils/taskIndex.ts`：基于 metadataCache 的全量与增量任务索引
+  - `src/utils/taskWriter.ts`：基于 `Vault.process()` 的任务严格定位、状态序列化与原子写回
 - 样式入口：`src/styles/main.css`
 - 构建配置：`esbuild.config.mjs`
 - 插件清单：`manifest.json`
@@ -36,9 +37,11 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 今日计时分布会区分无日记、无计时块、格式错误、空记录和有效记录；没有计时时仍显示默认空圆环。
 - `simple-time-tracker` 时长按当前日期边界裁剪，避免跨日计时污染单日统计。
 - 新增字数统计从插件启用后建立基线，不回填历史新增字数。
-- 任务模块使用 `metadataCache.listItems` 定位任务，扫描期间异步分批；当前 Phase 1 保持零写操作。
+- 任务模块使用 `metadataCache.listItems` 定位任务，扫描期间异步分批；所有任务写入只经过 `TaskWriter` 和 `Vault.process()`。
 - 任务按逾期、今天、待分类、长期、未来、已完成六区全量归类；异常、未知状态和循环任务仍显示并标注只读。
-- 目前没有独立测试框架；修改后至少运行 `npm run build` 做 TypeScript 与打包验证。
+- 写入前要求目标原文在文件中全局唯一；找不到、重复、循环、异常和未知状态任务拒绝写入并重新索引。
+- 任务状态固定为待办、进行中、完成、取消；可选记录完成或取消的终态日期，重新打开时移除终态日期。
+- 使用现有 Node、TypeScript 和 esbuild 测试脚本；修改后至少运行 `npm test` 与 `npm run build`。
 - 根目录 `main.js` 和 `styles.css` 是构建/发布产物，受 `.gitignore` 忽略；修改源码后需要重新构建，并用 `install.sh` 同步到实际 Obsidian vault 的 `.obsidian/plugins/time-grid/`。
 - 安装到 Obsidian 后，需要关闭/开启 Time Grid 插件、执行 Reload app without saving，或重启 Obsidian 才能加载新的 JS/CSS。
 
@@ -54,8 +57,9 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 写作增量统计已具备：插件启用后为全库 Markdown 建立字数基线，并按日期记录新增字数。
 - 最新构建/安装状态：上一轮功能改动已通过 TypeScript 检查和生产打包，并同步到两个 Obsidian vault 的 `time-grid` 插件目录。
 - 当前没有单独测试框架；现阶段以 `npm run build`、生产打包和 Obsidian 内手动检查作为主要验证方式。
-- 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433；尚未接入任何任务写操作。
-- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 9 个任务解析、状态、分区、排序和排除路径用例。
+- 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433。
+- 任务模块 Phase 2 已完成：四态菜单、完成/重新打开快捷按钮、终态日期、严格唯一定位、失败重扫和写作统计抑制已接入；异常、未知状态、循环和重复任务保持只读或拒写。
+- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 21 个任务解析、状态转换、分区、排序、路径排除、安全写回和统计抑制用例。
 
 ## 修改等级
 
@@ -129,3 +133,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/types/task.ts`、`src/utils/taskParser.ts`、`src/utils/taskIndex.ts`、`src/components/TaskPanel.ts`、`src/main.ts`、`src/views/TimeGridView.ts`、`src/utils/writingStats.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`
 - 验证方式：`npm test` 9 项通过；`npm run build` 通过；同步至两个真实 vault，并在 Aaron_Ob 的 Obsidian 1.12.7 中确认面板索引 625 条、分区和 50 条渲染限制正常。
 - 后续注意事项：Phase 1 为零写操作；Phase 2 才接入 `Vault.process()`、四态管理、严格重复拒写和终态日期。
+
+### 2026-08-01（任务模块 Phase 2）
+
+- 修改等级：L3 跨模块改动
+- 变更摘要：新增唯一原文定位和 `Vault.process()` 原子写回；加入待办、进行中、完成、取消四态菜单、完成/重新打开快捷按钮和可选终态日期；失败时 Notice 提示并重新索引；任务管理产生的字符差异从今日新增字数中扣除。
+- 涉及文件：`manifest.json`、`src/utils/taskWriter.ts`、`src/components/TaskPanel.ts`、`src/utils/writingStats.ts`、`src/main.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/obsidianStub.ts`、`tests/taskCore.test.ts`、`scripts/run-task-tests.mjs`
+- 验证方式：`npm test` 21 项通过；`npm run build` 通过；在专用临时 Git vault 中通过 Obsidian 1.12.7 完成 17 次真实状态写入，确认无空白差异、终态日期正确、历史缺空格任务在合法编辑后规范化。
+- 后续注意事项：临时 vault 的 20 次综合写入及编辑器并发验收将在 Phase 3–4 补足；真实 vault 继续只做非破坏性检查。

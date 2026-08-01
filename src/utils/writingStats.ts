@@ -44,6 +44,7 @@ export class WritingStatsTracker {
 	private pendingFiles = new Set<string>();
 	private saveTimer: number | null = null;
 	private processing = false;
+	private taskWriteSuppressions = new Map<string, number>();
 
 	constructor(plugin: Plugin, data: TimeGridPluginData, save: () => Promise<void>) {
 		this.plugin = plugin;
@@ -93,6 +94,13 @@ export class WritingStatsTracker {
 		return this.revision;
 	}
 
+	addTaskWriteSuppression(filePath: string, delta: number): void {
+		if (delta === 0) return;
+		const next = (this.taskWriteSuppressions.get(filePath) ?? 0) + delta;
+		if (next === 0) this.taskWriteSuppressions.delete(filePath);
+		else this.taskWriteSuppressions.set(filePath, next);
+	}
+
 	private queueBaselineOnly(file: TFile): void {
 		void this.setBaselineOnly(file);
 	}
@@ -139,10 +147,13 @@ export class WritingStatsTracker {
 		}
 
 		const delta = currentCount - previousCount;
-		if (delta !== 0) {
+		const taskDelta = this.taskWriteSuppressions.get(file.path) ?? 0;
+		this.taskWriteSuppressions.delete(file.path);
+		const effectiveDelta = getEffectiveWritingDelta(delta, taskDelta);
+		if (effectiveDelta !== 0) {
 			const todayKey = getDailyNoteFilename(new Date());
 			this.data.writingStats.dailyWordIncrements[todayKey] =
-				(this.data.writingStats.dailyWordIncrements[todayKey] ?? 0) + delta;
+				(this.data.writingStats.dailyWordIncrements[todayKey] ?? 0) + effectiveDelta;
 			this.revision++;
 		}
 
@@ -195,6 +206,10 @@ export function countMixedWords(content: string): number {
 	const chineseChars = withoutCodeBlocks.match(/[\u3400-\u9fff]/g)?.length ?? 0;
 	const latinWords = withoutCodeBlocks.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g)?.length ?? 0;
 	return chineseChars + latinWords;
+}
+
+export function getEffectiveWritingDelta(totalDelta: number, taskWriteDelta: number): number {
+	return totalDelta - taskWriteDelta;
 }
 
 function isMarkdownFile(file: TAbstractFile): file is TFile {
