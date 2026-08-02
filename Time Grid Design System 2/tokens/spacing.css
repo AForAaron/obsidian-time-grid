@@ -1,0 +1,6 @@
+:root{
+--space-1:2px;--space-2:4px;--space-3:6px;--space-4:8px;--space-5:12px;--space-6:16px;--space-7:18px;--space-8:24px;
+--tg-cell-size:20px;--tg-minute-size:16px;--tg-panel-radius:8px;--tg-cell-radius:4px;--tg-module-padding:16px;--tg-gap:12px;
+--tg-heatmap-cell-size:10px;--tg-heatmap-gap:4px;
+--touch-min:36px;--touch-comfortable:44px;
+}

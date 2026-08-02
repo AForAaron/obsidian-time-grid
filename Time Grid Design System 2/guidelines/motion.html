@@ -1,0 +1,13 @@
+<!-- @dsCard group="Brand" viewport="700x180" name="Motion" subtitle="Hover lift, heat-cell fade, live pulse — the only animations in the system" -->
+<html><head><link rel="stylesheet" href="../styles.css">
+<style>body{margin:0;background:var(--surface-app);padding:20px;display:flex;gap:36px;align-items:center;font-family:var(--font-ui);font-size:11px;color:var(--text-muted)}
+.demo{display:flex;flex-direction:column;align-items:center;gap:8px}
+.hoverbox{width:36px;height:36px;border-radius:6px;background:var(--heat-3);transition:transform .12s ease}
+.hoverbox:hover{transform:translateY(-3px)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--tg-viz-5);animation:tg-pulse 1.6s ease-in-out infinite}
+</style>
+</head><body>
+<div class="demo"><div class="hoverbox"></div>cell hover (translateY -1..3px, .12s)</div>
+<div class="demo"><div class="dot"></div>"in progress" pulse (1.6s ease-in-out)</div>
+<div class="demo" style="color:var(--text-faint);max-width:180px;text-align:center">no page transitions, no bounce/spring — every motion is a quiet, utilitarian cue</div>
+</body></html>

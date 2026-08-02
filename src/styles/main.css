@@ -15,6 +15,17 @@
 	--tg-muted: var(--tg-text-muted);
 	--tg-border: var(--tg-border-default);
 	--tg-accent: var(--interactive-accent);
+	--tg-today-ring: color-mix(in srgb, #ffd166 86%, var(--text-normal));
+	--tg-heat-1: color-mix(in srgb, var(--tg-accent) 30%, var(--tg-surface-panel));
+	--tg-heat-2: color-mix(in srgb, var(--tg-accent) 45%, var(--tg-surface-panel));
+	--tg-heat-3: color-mix(in srgb, var(--tg-accent) 63%, var(--tg-surface-panel));
+	--tg-heat-4: color-mix(in srgb, var(--tg-accent) 86%, white);
+	--tg-viz-0: #7f6ec8;
+	--tg-viz-1: #5f92b8;
+	--tg-viz-2: #78a886;
+	--tg-viz-3: #c39861;
+	--tg-viz-4: #b36d76;
+	--tg-viz-5: #85858d;
 	--tg-status-overdue: var(--text-error);
 	--tg-status-today: var(--interactive-accent);
 	--tg-status-triage: var(--color-yellow);
@@ -41,6 +52,9 @@
 	--tg-minute-size: 16px;
 	--tg-panel-radius: 8px;
 	--tg-cell-radius: 4px;
+	--tg-heatmap-cell-size: 10px;
+	--tg-heatmap-gap: 3px;
+	--tg-heat-empty: color-mix(in srgb, var(--tg-border-default) 52%, var(--tg-surface-panel));
 	--tg-module-padding: 16px;
 	--tg-gap: 12px;
 
@@ -2917,4 +2931,584 @@
 		justify-content: flex-end;
 		flex-wrap: wrap;
 	}
+}
+
+/* Claude Design 03: 此刻回环 · 日晷时间视图 */
+.tg-time-view {
+	container: tg-sundial / inline-size;
+}
+
+.tg-sundial-root {
+	display: flex;
+	flex-direction: column;
+	gap: 15px;
+	padding: 14px;
+	color: var(--tg-text-primary);
+}
+
+.tg-sundial-context {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.tg-sundial-context-block,
+.tg-sundial-dial-panel,
+.tg-sundial-activity {
+	min-width: 0;
+}
+
+.tg-sundial-section-head,
+.tg-sundial-dial-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 8px;
+}
+
+.tg-sundial-section-label {
+	color: var(--tg-text-muted);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: .075em;
+	text-transform: uppercase;
+}
+
+.tg-sundial-section-meta {
+	color: var(--tg-text-faint);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.tg-sundial-range-switch {
+	display: flex;
+	gap: 3px;
+}
+
+.tg-sundial-range-button {
+	appearance: none;
+	-webkit-appearance: none;
+	min-height: 26px;
+	margin: 0;
+	padding: 3px 7px;
+	border: 1px solid var(--tg-border-default);
+	border-radius: var(--tg-radius-pill);
+	background: transparent;
+	background-image: none;
+	box-shadow: none;
+	color: var(--tg-text-muted);
+	font-size: 10px;
+	cursor: pointer;
+}
+
+.tg-sundial-range-button.is-active {
+	border-color: var(--tg-accent);
+	background: color-mix(in srgb, var(--tg-accent) 13%, transparent);
+	background-image: none;
+	color: var(--tg-text-primary);
+}
+
+.tg-sundial-range-button:focus-visible,
+.tg-sundial-calendar-day:focus-visible,
+.tg-sundial-heat-cell:focus-visible,
+.tg-sundial-suggestion:focus-visible,
+.tg-sundial-action:focus-visible,
+.tg-sundial-timer-input:focus-visible {
+	outline: 2px solid var(--tg-accent);
+	outline-offset: 2px;
+}
+
+.tg-sundial-heat-layout {
+	display: grid;
+	grid-template-columns: 12px minmax(0, 1fr);
+	gap: 5px;
+	align-items: start;
+}
+
+.tg-sundial-heat-weekdays {
+	display: grid;
+	grid-template-rows: repeat(7, var(--tg-heatmap-cell-size));
+	gap: var(--tg-heatmap-gap);
+	color: var(--tg-text-faint);
+	font-size: 7px;
+	line-height: var(--tg-heatmap-cell-size);
+	text-align: center;
+}
+
+.tg-sundial-heat-scroll {
+	min-width: 0;
+	overflow-x: auto;
+	padding-bottom: 3px;
+	scrollbar-width: none;
+}
+
+.tg-sundial-heat-scroll::-webkit-scrollbar {
+	display: none;
+}
+
+.tg-sundial-heat-grid {
+	display: grid;
+	grid-auto-flow: column;
+	grid-template-rows: repeat(7, var(--tg-heatmap-cell-size));
+	grid-auto-columns: var(--tg-heatmap-cell-size);
+	gap: var(--tg-heatmap-gap);
+	width: max-content;
+}
+
+/* Match Design System TimeHeatmap cells: soft round dots, no box border. */
+.tg-sundial-heat-cell {
+	appearance: none;
+	-webkit-appearance: none;
+	position: relative;
+	width: var(--tg-heatmap-cell-size);
+	height: var(--tg-heatmap-cell-size);
+	min-width: 0;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--tg-cell-radius);
+	background: var(--tg-heat-empty);
+	background-image: none;
+	box-shadow: none;
+	cursor: pointer;
+	transition: transform var(--tg-duration-fast) ease, background var(--tg-duration-standard) ease;
+}
+
+.tg-sundial-heat-cell:hover {
+	transform: translateY(-1px);
+}
+
+.tg-sundial-heat-cell.level-1 { background: var(--tg-heat-1); }
+.tg-sundial-heat-cell.level-2 { background: var(--tg-heat-2); }
+.tg-sundial-heat-cell.level-3 { background: var(--tg-heat-3); }
+.tg-sundial-heat-cell.level-4 { background: var(--tg-heat-4); }
+
+.tg-sundial-heat-cell.is-future {
+	opacity: .45;
+	cursor: default;
+}
+
+.tg-sundial-heat-cell.is-today::after {
+	content: "";
+	position: absolute;
+	inset: -3px;
+	border: 1.5px solid var(--tg-today-ring);
+	border-radius: var(--tg-radius-pill);
+	pointer-events: none;
+}
+
+.tg-sundial-heat-summary {
+	margin-top: 3px;
+}
+
+.tg-sundial-heat-legend {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 6px;
+	margin-top: 6px;
+	color: var(--tg-text-faint);
+	font-size: 8.5px;
+}
+
+.tg-sundial-heat-legend-cells {
+	display: grid;
+	grid-template-columns: repeat(5, 14px);
+	gap: 2px;
+	padding: 2px;
+	border-radius: var(--tg-radius-pill);
+	background: var(--tg-surface-sunken);
+}
+
+.tg-sundial-heat-legend-cell {
+	display: block;
+	width: 14px;
+	height: 7px;
+	border-radius: 0;
+	background: var(--tg-heat-empty);
+}
+
+.tg-sundial-heat-legend-cell:first-child {
+	border-radius: var(--tg-radius-pill) 0 0 var(--tg-radius-pill);
+}
+
+.tg-sundial-heat-legend-cell:last-child {
+	border-radius: 0 var(--tg-radius-pill) var(--tg-radius-pill) 0;
+}
+
+.tg-sundial-heat-legend-cell.level-1 { background: var(--tg-heat-1); }
+.tg-sundial-heat-legend-cell.level-2 { background: var(--tg-heat-2); }
+.tg-sundial-heat-legend-cell.level-3 { background: var(--tg-heat-3); }
+.tg-sundial-heat-legend-cell.level-4 { background: var(--tg-heat-4); }
+
+.tg-sundial-calendar {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 3px;
+}
+
+.tg-sundial-calendar-weekday {
+	height: 12px;
+	color: var(--tg-text-faint);
+	font-size: 8px;
+	line-height: 12px;
+	text-align: center;
+}
+
+.tg-sundial-calendar-day {
+	appearance: none;
+	-webkit-appearance: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	min-height: 0;
+	aspect-ratio: 1;
+	margin: 0;
+	padding: 0;
+	border: 1px solid var(--tg-border-default);
+	border-radius: var(--tg-cell-radius);
+	background: transparent;
+	background-image: none;
+	box-shadow: none;
+	color: var(--tg-text-muted);
+	font-family: var(--font-monospace);
+	font-size: 9px;
+	cursor: pointer;
+}
+
+.tg-sundial-calendar-day.is-past {
+	background: color-mix(in srgb, var(--tg-text-primary) 12%, transparent);
+	color: var(--tg-text-primary);
+}
+
+.tg-sundial-calendar-day.is-today {
+	border-color: var(--tg-today-ring);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tg-today-ring) 28%, transparent);
+	color: var(--tg-text-primary);
+}
+
+.tg-sundial-calendar-day.is-future { opacity: .45; }
+.tg-sundial-calendar-day.is-empty { visibility: hidden; }
+
+.tg-sundial-now-zone {
+	padding: 15px 0;
+	border-top: 1px solid var(--tg-border-subtle);
+	border-bottom: 1px solid var(--tg-border-subtle);
+}
+
+.tg-sundial-dial-panel {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.tg-sundial-dial-header {
+	width: 100%;
+	margin-bottom: 2px;
+}
+
+.tg-sundial-dial {
+	display: block;
+	width: 244px;
+	max-width: 100%;
+	height: auto;
+	overflow: visible;
+}
+
+.tg-sundial-dial-track,
+.tg-sundial-dial-day,
+.tg-sundial-dial-hour {
+	fill: none;
+	stroke-linecap: round;
+}
+
+.tg-sundial-dial-track { stroke: var(--tg-border-subtle); }
+.tg-sundial-dial-day { stroke: var(--tg-text-primary); }
+.tg-sundial-dial-hour { stroke: var(--tg-accent); }
+.tg-sundial-dial-now { fill: var(--tg-today-ring); }
+
+.tg-sundial-dial-tick {
+	fill: var(--tg-text-faint);
+	font-family: var(--font-monospace);
+	font-size: 8px;
+	text-anchor: middle;
+}
+
+.tg-sundial-dial-caption {
+	margin-top: -4px;
+	text-align: center;
+}
+
+.tg-sundial-clock {
+	color: var(--tg-text-primary);
+	font-family: var(--font-monospace);
+	font-size: 19px;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.15;
+}
+
+.tg-sundial-dial-summary {
+	margin-top: 4px;
+	color: var(--tg-text-muted);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.tg-sundial-timer-panel {
+	min-width: 0;
+	margin-top: 13px;
+	padding: 11px;
+	border: 1px solid var(--tg-border-default);
+	border-radius: 8px;
+	background: var(--tg-surface-panel);
+}
+
+.tg-sundial-timer-panel.is-running {
+	border-color: color-mix(in srgb, var(--tg-today-ring) 35%, var(--tg-border-default));
+}
+
+.tg-sundial-timer-panel.is-error {
+	border-color: color-mix(in srgb, var(--tg-viz-4) 60%, var(--tg-border-default));
+}
+
+.tg-sundial-timer-panel.is-busy { opacity: .72; }
+
+.tg-sundial-timer-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 9px;
+}
+
+.tg-sundial-timer-eyebrow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--tg-text-muted);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: .04em;
+}
+
+.tg-sundial-live-dot {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	margin-left: 5px;
+	border-radius: 50%;
+	background: var(--tg-today-ring);
+	flex: none;
+}
+
+.tg-sundial-timer-elapsed {
+	color: var(--tg-text-primary);
+	font-family: var(--font-monospace);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+.tg-sundial-timer-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 6px;
+}
+
+.tg-sundial-timer-input {
+	min-width: 0;
+	height: 36px;
+	margin: 0;
+	padding: 0 10px;
+	border: 1px solid var(--tg-border-default);
+	border-radius: 6px;
+	background: var(--tg-surface-sunken);
+	box-shadow: none;
+	color: var(--tg-text-primary);
+	font-size: 11.5px;
+}
+
+.tg-sundial-timer-input::placeholder { color: var(--tg-text-faint); }
+
+.tg-sundial-action {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	min-height: 36px;
+	margin: 0;
+	padding: 0 12px;
+	border: 1px solid var(--tg-border-default);
+	border-radius: 6px;
+	background: transparent;
+	background-image: none;
+	box-shadow: none;
+	color: var(--tg-text-primary);
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.tg-sundial-action:hover { background: var(--tg-surface-hover); }
+.tg-sundial-action.primary { border-color: var(--tg-accent); background: var(--tg-accent); color: white; }
+.tg-sundial-action.danger { border-color: color-mix(in srgb, var(--tg-viz-4) 55%, var(--tg-border-default)); color: var(--tg-viz-4); }
+.tg-sundial-action.quiet { min-height: 30px; padding: 0 9px; font-size: 10px; font-weight: 500; }
+
+.tg-sundial-play-icon {
+	width: 0;
+	height: 0;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	border-left: 6px solid currentColor;
+}
+
+.tg-sundial-stop-icon {
+	width: 7px;
+	height: 7px;
+	border-radius: 1px;
+	background: currentColor;
+}
+
+.tg-sundial-running-main {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 9px;
+}
+
+.tg-sundial-running-info { min-width: 0; }
+.tg-sundial-running-name { min-width: 0; overflow: hidden; color: var(--tg-text-primary); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.tg-sundial-running-since { margin-top: 3px; color: var(--tg-text-faint); font-size: 9.5px; }
+.tg-sundial-switch-label { margin: 10px 0 6px; color: var(--tg-text-faint); font-size: 9.5px; }
+
+.tg-sundial-suggestions {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	margin-top: 9px;
+}
+
+.tg-sundial-suggestion-group { display: flex; align-items: flex-start; gap: 7px; }
+.tg-sundial-suggestion-label { width: 34px; padding-top: 5px; color: var(--tg-text-faint); font-size: 8.5px; flex: none; }
+.tg-sundial-suggestion-list { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+
+.tg-sundial-suggestion {
+	max-width: 150px;
+	min-height: 27px;
+	margin: 0;
+	padding: 4px 8px;
+	overflow: hidden;
+	border: 1px solid var(--tg-border-subtle);
+	border-radius: 999px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text-muted);
+	font-size: 9.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.tg-sundial-suggestion:hover { border-color: var(--tg-border-default); background: var(--tg-surface-hover); color: var(--tg-text-primary); }
+.tg-sundial-timer-helper { margin-top: 7px; color: var(--tg-text-faint); font-size: 9.5px; line-height: 1.45; }
+
+.tg-sundial-notice {
+	padding: 10px;
+	border: 1px solid var(--tg-border-default);
+	border-radius: 6px;
+	background: var(--tg-surface-sunken);
+}
+
+.tg-sundial-notice-title { color: var(--tg-text-primary); font-size: 11.5px; font-weight: 650; }
+.tg-sundial-notice-copy { margin-top: 5px; color: var(--tg-text-muted); font-size: 10px; line-height: 1.5; }
+.tg-sundial-notice-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.tg-sundial-notice-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--tg-text-muted); font-size: 10px; }
+.tg-sundial-notice-row strong { color: var(--tg-text-primary); font-weight: 550; }
+.tg-sundial-notice-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+
+.tg-sundial-activity-bar {
+	display: flex;
+	height: 12px;
+	overflow: hidden;
+	border-radius: 3px;
+	background: var(--tg-surface-sunken);
+}
+
+.tg-sundial-activity-segment { height: 100%; transition: opacity .15s ease; }
+.tg-sundial-activity-bar:hover .tg-sundial-activity-segment { opacity: .35; }
+.tg-sundial-activity-bar .tg-sundial-activity-segment:hover { opacity: 1; }
+.tg-sundial-viz-0 { background: var(--tg-viz-0); }
+.tg-sundial-viz-1 { background: var(--tg-viz-1); }
+.tg-sundial-viz-2 { background: var(--tg-viz-2); }
+.tg-sundial-viz-3 { background: var(--tg-viz-3); }
+.tg-sundial-viz-4 { background: var(--tg-viz-4); }
+.tg-sundial-viz-5 { background: var(--tg-viz-5); }
+
+.tg-sundial-activity-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.tg-sundial-activity-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-height: 25px; padding: 2px 3px; border-radius: 4px; color: var(--tg-text-primary); font-size: 10.5px; }
+.tg-sundial-activity-row:hover { background: var(--tg-surface-hover); }
+.tg-sundial-activity-swatch { width: 7px; height: 7px; border-radius: 2px; }
+.tg-sundial-activity-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-sundial-activity-value { color: var(--tg-text-muted); font-family: var(--font-monospace); font-size: 9.5px; white-space: nowrap; }
+.tg-sundial-activity-status { display: flex; align-items: center; gap: 2px; margin-top: 8px; color: var(--tg-text-faint); font-size: 9.5px; }
+.tg-sundial-activity-empty { padding: 13px 0 4px; color: var(--tg-text-faint); font-size: 10px; text-align: center; }
+
+.tg-sundial-tooltip {
+	position: fixed;
+	z-index: 1000;
+	pointer-events: none;
+	padding: 6px 8px;
+	border: 1px solid var(--tg-border-default);
+	border-radius: 5px;
+	background: var(--background-primary-alt);
+	box-shadow: var(--tg-shadow-tooltip);
+	color: var(--tg-text-primary);
+	font-size: 9.5px;
+	line-height: 1.45;
+}
+
+.tg-sundial-tooltip strong { display: block; font-weight: 600; }
+
+@media (prefers-reduced-motion: no-preference) {
+	.tg-sundial-live-dot,
+	.tg-sundial-dial-now { animation: tg-sundial-quiet-pulse 1.8s ease-in-out infinite; }
+	@keyframes tg-sundial-quiet-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tg-sundial-root * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}
+
+@container tg-sundial (max-width: 299px) {
+	.tg-sundial-root { gap: 12px; padding: 11px; }
+	.tg-sundial-range-button { padding-inline: 6px; }
+	.tg-sundial-dial { width: 210px; }
+	.tg-sundial-clock { font-size: 17px; }
+	.tg-sundial-timer-panel { padding: 9px; }
+	.tg-sundial-suggestion-group { display: block; }
+	.tg-sundial-suggestion-label { display: block; width: auto; margin-bottom: 4px; padding: 0; }
+	.tg-sundial-activity-value { font-size: 9px; }
+}
+
+@container tg-sundial (min-width: 420px) {
+	.tg-sundial-root { gap: 18px; padding: 18px; }
+	.tg-sundial-dial { width: 292px; }
+	.tg-sundial-clock { font-size: 21px; }
+	.tg-sundial-timer-panel { padding: 13px; }
+	.tg-sundial-calendar-day { font-size: 10px; }
+	.tg-sundial-suggestion-label { width: 42px; }
+}
+
+@container tg-sundial (min-width: 680px) {
+	.tg-sundial-root { gap: 20px; padding: 20px; }
+	.tg-sundial-context { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(210px, .6fr); gap: 22px; align-items: start; }
+	.tg-sundial-now-zone { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .85fr); gap: 24px; align-items: center; }
+	.tg-sundial-timer-panel { margin-top: 0; }
+	.tg-sundial-activity-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
+	.tg-sundial-dial { width: 322px; }
 }

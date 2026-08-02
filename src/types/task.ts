@@ -111,6 +111,7 @@ export type TimeGridMode = 'time' | 'tasks';
 
 export interface TimeGridUiState {
 	activeMode: TimeGridMode;
+	timeRange: import('./timer').TimeRange;
 }
 
 export const DEFAULT_TASK_SETTINGS: TaskSettings = {
@@ -134,6 +135,7 @@ export const DEFAULT_TASK_PANEL_STATE: TaskPanelState = {
 
 export const DEFAULT_TIME_GRID_UI_STATE: TimeGridUiState = {
 	activeMode: 'time',
+	timeRange: '6m',
 };
 
 export type WriteFailReason =

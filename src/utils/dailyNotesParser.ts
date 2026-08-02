@@ -46,7 +46,8 @@ export function parseSimpleTimeTracker(content: string): SimpleTimeTrackerParseR
 		return { status: 'missing', data: null };
 	}
 	try {
-		return { status: 'ok', data: JSON.parse(match[1].trim()) as SimpleTimeTrackerData };
+		const body = match[1].trim();
+		return { status: 'ok', data: body ? JSON.parse(body) as SimpleTimeTrackerData : { entries: [] } };
 	} catch {
 		return { status: 'invalid', data: null };
 	}

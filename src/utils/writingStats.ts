@@ -9,6 +9,7 @@ import {
 	TimeGridUiState,
 } from '../types/task';
 import { DEFAULT_ROUTINE_SETTINGS, RoutineSettings } from '../types/routine';
+import { DEFAULT_TIMER_RECOVERY_STATE, TimerRecoveryState } from '../types/timer';
 import { getDailyNoteFilename } from './dailyNotesParser';
 
 export type WritingStatsData = {
@@ -22,6 +23,7 @@ export type TimeGridPluginData = {
 	taskPanelState: TaskPanelState;
 	uiState: TimeGridUiState;
 	routineSettings: RoutineSettings;
+	timerRecovery: TimerRecoveryState;
 };
 
 export const DEFAULT_TIME_GRID_DATA: TimeGridPluginData = {
@@ -35,6 +37,7 @@ export const DEFAULT_TIME_GRID_DATA: TimeGridPluginData = {
 	},
 	uiState: { ...DEFAULT_TIME_GRID_UI_STATE },
 	routineSettings: { ...DEFAULT_ROUTINE_SETTINGS, reminderLog: {} },
+	timerRecovery: { ...DEFAULT_TIMER_RECOVERY_STATE },
 };
 
 export const HEATMAP_RANGES = {
@@ -205,8 +208,12 @@ export function normalizeTimeGridData(raw: unknown): TimeGridPluginData {
 		},
 		uiState: {
 			activeMode: input.uiState?.activeMode === 'tasks' ? 'tasks' : 'time',
+			timeRange: normalizeTimeRange(input.uiState?.timeRange),
 		},
 		routineSettings: normalizeRoutineSettings(input.routineSettings),
+		timerRecovery: {
+			active: normalizeTimerRecovery(input.timerRecovery?.active),
+		},
 	};
 }
 
@@ -234,6 +241,19 @@ function normalizeDoneRange(value: unknown): DoneRange {
 function normalizeRenderLimit(value: unknown): number {
 	if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_TASK_SETTINGS.renderLimit;
 	return Math.min(1000, Math.max(1, Math.round(value)));
+}
+
+function normalizeTimeRange(value: unknown): import('../types/timer').TimeRange {
+	return value === '3m' || value === '1y' ? value : '6m';
+}
+
+function normalizeTimerRecovery(value: unknown): import('../types/timer').TimerRecoveryPointer | null {
+	if (!value || typeof value !== 'object') return null;
+	const input = value as Partial<import('../types/timer').TimerRecoveryPointer>;
+	if (typeof input.name !== 'string' || !input.name.trim()) return null;
+	if (typeof input.startTime !== 'string' || !Number.isFinite(Date.parse(input.startTime))) return null;
+	if (typeof input.sourceDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.sourceDate)) return null;
+	return { name: input.name.trim(), startTime: input.startTime, sourceDate: input.sourceDate };
 }
 
 function normalizeRoutineSettings(value: RoutineSettings | undefined): RoutineSettings {

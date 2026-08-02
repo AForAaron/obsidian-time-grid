@@ -28,6 +28,18 @@ import {
 } from '../src/utils/routineFormat';
 import { RoutineDocument } from '../src/types/routine';
 import { isRoutineReminderDue, reminderKey } from '../src/utils/routineReminder';
+import { parseSimpleTimeTracker } from '../src/utils/dailyNotesParser';
+import { timerSuggestionName } from '../src/utils/timerController';
+import {
+	closeTimerByIdentity,
+	ensureTrackerBlock,
+	inspectTimerContent,
+	startTimerInContent,
+	stopTimerInContent,
+	TIMER_SLOT_END,
+	TIMER_SLOT_START,
+	upsertTimerSegment,
+} from '../src/utils/timerFormat';
 
 let passed = 0;
 
@@ -316,6 +328,22 @@ test('view state migration defaults old data to time and preserves a saved tasks
 	assert.equal(normalizeTimeGridData({}).uiState.activeMode, 'time');
 	assert.equal(normalizeTimeGridData({ uiState: { activeMode: 'tasks' } }).uiState.activeMode, 'tasks');
 	assert.equal(normalizeTimeGridData({ uiState: { activeMode: 'invalid' } }).uiState.activeMode, 'time');
+	assert.equal(normalizeTimeGridData({}).uiState.timeRange, '6m');
+	assert.equal(normalizeTimeGridData({ uiState: { timeRange: '3m' } }).uiState.timeRange, '3m');
+	assert.equal(normalizeTimeGridData({ uiState: { timeRange: 'bad' } }).uiState.timeRange, '6m');
+	assert.equal(normalizeTimeGridData({}).timerRecovery.active, null);
+	assert.deepEqual(
+		normalizeTimeGridData({
+			timerRecovery: { active: { name: '阅读', startTime: '2026-08-01T14:00:00.000Z', sourceDate: '2026-08-01' } },
+		}).timerRecovery.active,
+		{ name: '阅读', startTime: '2026-08-01T14:00:00.000Z', sourceDate: '2026-08-01' }
+	);
+	assert.equal(
+		normalizeTimeGridData({
+			timerRecovery: { active: { name: '  ', startTime: 'bad', sourceDate: '08-01' } },
+		}).timerRecovery.active,
+		null
+	);
 });
 
 test('floating layers prefer the requested side when it fits', () => {
@@ -539,6 +567,123 @@ test('task card style contract matches the compact Claude design', () => {
 	assert.doesNotMatch(badge, /(?:^|\n)\s*(?:width|min-width|max-width):\s*[1-9]\d*px/);
 	assert.doesNotMatch(css, /\.tg-task-status-badge\.is-(?:in-progress|done|cancelled|unknown)\s*\{[^}]*background:/);
 	assert.match(css, /@media \(hover: none\), \(pointer: coarse\)[\s\S]*?\.tg-task-status-control \{[\s\S]*?min-width:\s*36px(?:\s*!important)?;[\s\S]*?min-height:\s*36px(?:\s*!important)?;/);
+});
+
+test('timer block insertion prefers the unique template slot and preserves CRLF BOM', () => {
+	const source = `\uFEFF# Daily\r\n${TIMER_SLOT_START}\r\n${TIMER_SLOT_END}\r\n尾部\r\n`;
+	const inserted = ensureTrackerBlock(source);
+	assert.equal(inserted.result.ok, true);
+	assert.equal(inserted.content.startsWith('\uFEFF'), true);
+	assert.equal(inserted.content.includes('\r\n'), true);
+	assert.match(inserted.content, /time-grid-timer-slot:start -->\r\n```simple-time-tracker/);
+	assert.match(inserted.content, /```\r\n<!-- time-grid-timer-slot:end/);
+	assert.equal(inserted.content.endsWith('尾部\r\n'), true);
+});
+
+test('timer block insertion appends a restrained section when the template has no slot', () => {
+	const inserted = ensureTrackerBlock('# Daily\n\n正文\n');
+	assert.equal(inserted.result.ok, true);
+	assert.match(inserted.content, /正文\n\n## 时间记录\n\n```simple-time-tracker/);
+});
+
+test('timer parser accepts zero or one block and rejects multiple blocks invalid JSON and malformed markers', () => {
+	assert.equal(inspectTimerContent('# Daily\n').status, 'missing');
+	assert.equal(inspectTimerContent('```simple-time-tracker\n\n```\n').status, 'ready');
+	assert.equal(inspectTimerContent('```simple-time-tracker\n{bad}\n```\n').status, 'invalid');
+	const block = '```simple-time-tracker\n{"entries":[]}\n```\n';
+	assert.equal(inspectTimerContent(`${block}\n${block}`).status, 'multiple');
+	assert.equal(inspectTimerContent(`${TIMER_SLOT_START}\n${block}`).status, 'invalid');
+});
+
+test('duration parser treats the official empty tracker block as an empty valid document', () => {
+	assert.deepEqual(parseSimpleTimeTracker('```simple-time-tracker\n```\n'), { status: 'ok', data: { entries: [] } });
+});
+
+test('timer suggestions use readable task display names without Markdown decoration', () => {
+	assert.equal(timerSuggestionName('Leetcode ==***5 道***=='), 'Leetcode 5 道');
+	assert.equal(timerSuggestionName('[阅读计划](Projects/Reading.md)  `30min`'), '阅读计划 30min');
+});
+
+test('timer start trims names and preserves unknown JSON fields and nested records', () => {
+	const source = '前文\n```simple-time-tracker\n{"version":7,"custom":{"keep":true},"entries":[{"name":"分组","opaque":"yes","subEntries":[{"name":"旧记录","startTime":"2026-08-02T00:00:00.000Z","endTime":"2026-08-02T01:00:00.000Z","extra":9}]}]}\n```\n后文\n';
+	const started = startTimerInContent(source, '  写代码  ', new Date('2026-08-02T02:00:00.000Z'));
+	assert.equal(started.result.ok, true);
+	assert.match(started.content, /"version":7/);
+	assert.match(started.content, /"custom":\{"keep":true\}/);
+	assert.match(started.content, /"opaque":"yes"/);
+	assert.match(started.content, /"extra":9/);
+	assert.equal(started.content.startsWith('前文\n'), true);
+	assert.equal(started.content.endsWith('后文\n'), true);
+	assert.deepEqual(inspectTimerContent(started.content).runningEntries.map((entry) => entry.name), ['写代码']);
+});
+
+test('timer rejects empty activity names without changing content', () => {
+	const source = '```simple-time-tracker\n{"entries":[]}\n```\n';
+	const result = startTimerInContent(source, '   ', new Date('2026-08-02T02:00:00.000Z'));
+	assert.equal(result.result.ok, false);
+	assert.equal(result.changed, false);
+	assert.equal(result.content, source);
+});
+
+test('timer switch closes the old activity and opens the new one at the same timestamp', () => {
+	const started = startTimerInContent('', '阅读', new Date('2026-08-02T02:00:00.000Z'));
+	const switched = startTimerInContent(started.content, '写代码', new Date('2026-08-02T03:04:05.000Z'));
+	assert.deepEqual(switched.result, { ok: true, switchedFrom: '阅读' });
+	const document = inspectTimerContent(switched.content).document!;
+	assert.equal(document.entries.length, 2);
+	assert.equal(document.entries[0].endTime, '2026-08-02T03:04:05.000Z');
+	assert.equal(document.entries[1].startTime, '2026-08-02T03:04:05.000Z');
+	assert.equal(document.entries[1].endTime, null);
+});
+
+test('timer start and stop create independent segments for the same activity', () => {
+	const first = startTimerInContent('', '阅读', new Date('2026-08-02T02:00:00.000Z'));
+	const stopped = stopTimerInContent(first.content, new Date('2026-08-02T02:30:00.000Z'));
+	const second = startTimerInContent(stopped.content, '阅读', new Date('2026-08-02T03:00:00.000Z'));
+	const entries = inspectTimerContent(second.content).document!.entries;
+	assert.equal(entries.length, 2);
+	assert.equal(entries[0].endTime, '2026-08-02T02:30:00.000Z');
+	assert.equal(entries[1].endTime, null);
+});
+
+test('nested multiple running timers require explicit conflict resolution', () => {
+	const source = '```simple-time-tracker\n{"entries":[{"name":"组","subEntries":[{"name":"A","startTime":"2026-08-02T01:00:00.000Z","endTime":null},{"name":"B","startTime":"2026-08-02T01:30:00.000Z","endTime":null}]}]}\n```\n';
+	const rejected = startTimerInContent(source, 'C', new Date('2026-08-02T02:00:00.000Z'));
+	assert.equal(rejected.result.ok, false);
+	assert.equal(rejected.content, source);
+	const resolved = startTimerInContent(source, 'C', new Date('2026-08-02T02:00:00.000Z'), true);
+	assert.equal(resolved.result.ok, true);
+	assert.deepEqual(inspectTimerContent(resolved.content).runningEntries.map((entry) => entry.name), ['C']);
+});
+
+test('cross-midnight close and continuation upsert are idempotent and refuse stale edits', () => {
+	const startTime = '2026-08-01T14:00:00.000Z';
+	const started = startTimerInContent('', '写代码', new Date(startTime));
+	const closed = closeTimerByIdentity(started.content, '写代码', startTime, new Date('2026-08-01T16:00:00.000Z'));
+	assert.equal(closed.result.ok, true);
+	const closedAgain = closeTimerByIdentity(closed.content, '写代码', startTime, new Date('2026-08-01T16:00:00.000Z'));
+	assert.equal(closedAgain.result.ok, true);
+	assert.equal(closedAgain.changed, false);
+	const continued = upsertTimerSegment('', '写代码', new Date('2026-08-01T16:00:00.000Z'), null);
+	const continuedAgain = upsertTimerSegment(continued.content, '写代码', new Date('2026-08-01T16:00:00.000Z'), null);
+	assert.equal(continuedAgain.result.ok, true);
+	assert.equal(continuedAgain.changed, false);
+	const stale = closeTimerByIdentity(closed.content, '写代码', startTime, new Date('2026-08-01T17:00:00.000Z'));
+	assert.equal(stale.result.ok, false);
+	assert.equal(stale.content, closed.content);
+});
+
+test('sundial production CSS preserves the approved Claude Design breakpoints and reduced motion', () => {
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	assert.match(css, /@container tg-sundial \(max-width: 299px\)/);
+	assert.match(css, /@container tg-sundial \(min-width: 420px\)/);
+	assert.match(css, /@container tg-sundial \(min-width: 680px\)/);
+	assert.match(css, /prefers-reduced-motion: reduce/);
+	assert.match(css, /\.tg-sundial-dial-now/);
+	assert.match(css, /\.tg-sundial-timer-panel/);
+	assert.match(css, /\.tg-sundial-heat-cell \{[\s\S]*?border-radius: var\(--tg-cell-radius\)/);
+	assert.match(css, /\.tg-sundial-heat-cell\.is-today::after/);
+	assert.match(css, /--tg-heatmap-cell-size: 10px/);
 });
 
 console.log(`\n${passed} task core tests passed.`);

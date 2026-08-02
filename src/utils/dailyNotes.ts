@@ -70,6 +70,19 @@ export function getDailyNoteFileForDate(app: App, date: Date): TFile | null {
 	return existing instanceof TFile ? existing : null;
 }
 
+export function isDailyNotesAvailable(): boolean {
+	return appHasDailyNotesPluginLoaded();
+}
+
+export async function getOrCreateDailyNoteFileForDate(app: App, date: Date): Promise<TFile | null> {
+	if (!appHasDailyNotesPluginLoaded()) return null;
+	const momentDate = getMomentDate(date);
+	const existing = getDailyNote(momentDate, getAllDailyNotes());
+	if (existing instanceof TFile) return existing;
+	const created = await createDailyNote(momentDate);
+	return created instanceof TFile ? created : null;
+}
+
 /**
  * 若核心「日记」插件已启用，则打开或创建当天的日记并应用模板；否则提示用户。
  */

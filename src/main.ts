@@ -9,6 +9,8 @@ import { RoutineRepository } from './utils/routineRepository';
 import { RoutineWriter } from './utils/routineWriter';
 import { RoutineReminderScheduler } from './utils/routineReminder';
 import { DEFAULT_ROUTINE_DEFINITION_PATH, RoutineSettings } from './types/routine';
+import { TimerRepository } from './utils/timerRepository';
+import { TimerController } from './utils/timerController';
 
 export default class TimeGridPlugin extends Plugin {
 	private dataStore: TimeGridPluginData;
@@ -19,6 +21,8 @@ export default class TimeGridPlugin extends Plugin {
 	private routineIndex: RoutineIndex;
 	private routineWriter: RoutineWriter;
 	private routineReminder: RoutineReminderScheduler;
+	private timerRepository: TimerRepository;
+	private timerController: TimerController;
 	private metadataResolvedHandled = false;
 
 	async onload() {
@@ -44,6 +48,17 @@ export default class TimeGridPlugin extends Plugin {
 				await this.saveData(this.dataStore);
 			}
 		);
+		this.timerRepository = new TimerRepository(this.app, this.writingStats);
+		this.timerController = new TimerController(
+			this.timerRepository,
+			this.taskIndex,
+			this.routineIndex,
+			() => this.dataStore.timerRecovery,
+			async (timerRecovery) => {
+				this.dataStore.timerRecovery = timerRecovery;
+				await this.saveData(this.dataStore);
+			}
+		);
 		this.registerTaskIndexEvents();
 		this.addSettingTab(new TimeGridSettingTab(this.app, this));
 
@@ -58,6 +73,7 @@ export default class TimeGridPlugin extends Plugin {
 				this.routineRepository,
 				this.routineIndex,
 				this.routineWriter,
+				this.timerController,
 				() => this.dataStore.taskSettings,
 				() => this.dataStore.taskPanelState,
 				async (state) => {
@@ -68,6 +84,11 @@ export default class TimeGridPlugin extends Plugin {
 				async (activeMode) => {
 					this.dataStore.uiState.activeMode = activeMode;
 					await this.saveData(this.dataStore);
+				},
+				() => this.dataStore.uiState.timeRange,
+				async (timeRange) => {
+					this.dataStore.uiState.timeRange = timeRange;
+					await this.saveData(this.dataStore);
 				}
 			)
 		);
@@ -76,6 +97,7 @@ export default class TimeGridPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => {
 			void this.taskIndex.rebuild();
 			void this.routineIndex.rebuild();
+			void this.timerController.initialize();
 			this.activateView();
 		});
 	}
@@ -84,6 +106,7 @@ export default class TimeGridPlugin extends Plugin {
 		this.taskIndex?.destroy();
 		this.routineReminder?.destroy();
 		this.routineIndex?.destroy();
+		this.timerController?.destroy();
 	}
 
 	getTaskSettings(): TaskSettings {
@@ -129,6 +152,7 @@ export default class TimeGridPlugin extends Plugin {
 			if (file instanceof TFile && file.extension === 'md') {
 				this.taskIndex.scheduleReindex(file);
 				this.routineIndex.scheduleRebuild();
+				this.timerController.scheduleRefresh();
 			}
 		}));
 		this.registerEvent(this.app.metadataCache.on('resolved', () => {
@@ -136,15 +160,22 @@ export default class TimeGridPlugin extends Plugin {
 			this.metadataResolvedHandled = true;
 			void this.taskIndex.rebuild();
 		}));
-		this.registerEvent(this.app.vault.on('delete', (file) => this.taskIndex.dropFile(file.path)));
+		this.registerEvent(this.app.vault.on('delete', (file) => {
+			this.taskIndex.dropFile(file.path);
+			this.timerController.scheduleRefresh();
+		}));
 		this.registerEvent(this.app.vault.on('delete', () => this.routineIndex.scheduleRebuild()));
 		this.registerEvent(this.app.vault.on('create', (file) => {
-			if (file instanceof TFile && file.extension === 'md') this.routineIndex.scheduleRebuild();
+			if (file instanceof TFile && file.extension === 'md') {
+				this.routineIndex.scheduleRebuild();
+				this.timerController.scheduleRefresh();
+			}
 		}));
 		this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
 			this.taskIndex.dropFile(oldPath);
 			if (file instanceof TFile && file.extension === 'md') this.taskIndex.scheduleReindex(file);
 			this.routineIndex.scheduleRebuild();
+			this.timerController.scheduleRefresh();
 		}));
 	}
 }

@@ -1,11 +1,8 @@
 import { ItemView, Notice, setIcon, TFile, WorkspaceLeaf } from 'obsidian';
-import { TimeHeatmap } from '../components/TimeHeatmap';
-import { MonthHeatmap } from '../components/MonthHeatmap';
-import { DayGrid } from '../components/DayGrid';
-import { HourGrid } from '../components/HourGrid';
-import { DailyPieChart } from '../components/DailyPieChart';
+import { SundialTimeView } from '../components/SundialTimeView';
 import { TaskPanel } from '../components/TaskPanel';
 import { TaskPanelState, TaskSettings, TimeGridMode } from '../types/task';
+import { TimeRange } from '../types/timer';
 import { openOrCreateDailyNoteForDate, openOrCreateTodayDailyNote } from '../utils/dailyNotes';
 import { TaskIndex } from '../utils/taskIndex';
 import { TaskWriter } from '../utils/taskWriter';
@@ -17,16 +14,14 @@ import { RoutineManagerModal } from '../components/RoutineManagerModal';
 import { RoutineMigrationModal } from '../components/RoutineMigrationModal';
 import { RoutineItemEditModal } from '../components/RoutineItemEditModal';
 import { RoutinePromoteModal } from '../components/RoutinePromoteModal';
+import { TimerController } from '../utils/timerController';
 
 export const TIME_GRID_VIEW = 'time-grid-view';
 
 export class TimeGridView extends ItemView {
 	private writingStats: WritingStatsTracker;
-	private timeHeatmap: TimeHeatmap;
-	private monthHeatmap: MonthHeatmap;
-	private dayGrid: DayGrid;
-	private hourGrid: HourGrid;
-	private dailyPieChart: DailyPieChart;
+	private sundialTimeView: SundialTimeView;
+	private timerController: TimerController;
 	private taskPanel: TaskPanel;
 	private taskIndex: TaskIndex;
 	private taskWriter: TaskWriter;
@@ -38,6 +33,8 @@ export class TimeGridView extends ItemView {
 	private saveTaskPanelState: (state: TaskPanelState) => Promise<void>;
 	private getActiveMode: () => TimeGridMode;
 	private saveActiveMode: (mode: TimeGridMode) => Promise<void>;
+	private getTimeRange: () => TimeRange;
+	private saveTimeRange: (range: TimeRange) => Promise<void>;
 	private activeMode: TimeGridMode = 'time';
 	private timePane: HTMLElement;
 	private taskPane: HTMLElement;
@@ -52,11 +49,14 @@ export class TimeGridView extends ItemView {
 		routineRepository: RoutineRepository,
 		routineIndex: RoutineIndex,
 		routineWriter: RoutineWriter,
+		timerController: TimerController,
 		getTaskSettings: () => TaskSettings,
 		getTaskPanelState: () => TaskPanelState,
 		saveTaskPanelState: (state: TaskPanelState) => Promise<void>,
 		getActiveMode: () => TimeGridMode,
-		saveActiveMode: (mode: TimeGridMode) => Promise<void>
+		saveActiveMode: (mode: TimeGridMode) => Promise<void>,
+		getTimeRange: () => TimeRange,
+		saveTimeRange: (range: TimeRange) => Promise<void>
 	) {
 		super(leaf);
 		this.writingStats = writingStats;
@@ -65,11 +65,14 @@ export class TimeGridView extends ItemView {
 		this.routineRepository = routineRepository;
 		this.routineIndex = routineIndex;
 		this.routineWriter = routineWriter;
+		this.timerController = timerController;
 		this.getTaskSettings = getTaskSettings;
 		this.getTaskPanelState = getTaskPanelState;
 		this.saveTaskPanelState = saveTaskPanelState;
 		this.getActiveMode = getActiveMode;
 		this.saveActiveMode = saveActiveMode;
+		this.getTimeRange = getTimeRange;
+		this.saveTimeRange = saveTimeRange;
 	}
 
 	getViewType(): string {
@@ -97,20 +100,18 @@ export class TimeGridView extends ItemView {
 		const panes = container.createDiv('tg-view-panes');
 		this.timePane = panes.createDiv({ cls: 'tg-view-pane tg-time-view', attr: { role: 'tabpanel' } });
 		this.taskPane = panes.createDiv({ cls: 'tg-view-pane tg-task-view', attr: { role: 'tabpanel' } });
-		const wrapper = this.timePane.createDiv('tg-wrapper');
-
-		// 初始化三个组件
-		this.timeHeatmap = new TimeHeatmap(wrapper, this.app, this.writingStats, {
-			onTitleClick: () => void openOrCreateTodayDailyNote(this.app),
-			onDateClick: (date) => void openOrCreateDailyNoteForDate(this.app, date, true),
-		});
-		this.monthHeatmap = new MonthHeatmap(wrapper, {
-			onTitleClick: () => void openOrCreateTodayDailyNote(this.app),
-			onDateClick: (date) => void openOrCreateDailyNoteForDate(this.app, date, true),
-		});
-		this.dayGrid = new DayGrid(wrapper);
-		this.hourGrid = new HourGrid(wrapper);
-		this.dailyPieChart = new DailyPieChart(wrapper, this.app);
+		this.sundialTimeView = new SundialTimeView(
+			this.timePane,
+			this.app,
+			this.writingStats,
+			this.timerController,
+			{
+				getRange: this.getTimeRange,
+				saveRange: this.saveTimeRange,
+				onOpenToday: () => void openOrCreateTodayDailyNote(this.app),
+				onDateClick: (date) => void openOrCreateDailyNoteForDate(this.app, date, true),
+			}
+		);
 		this.taskPanel = new TaskPanel(this.taskPane, this.app, this.taskIndex, {
 			getSettings: this.getTaskSettings,
 			getState: this.getTaskPanelState,
@@ -171,6 +172,7 @@ export class TimeGridView extends ItemView {
 			clearInterval(this.updateInterval);
 		}
 		this.taskPanel?.destroy();
+		this.sundialTimeView?.destroy();
 	}
 
 	private updateAll(): void {
@@ -197,11 +199,7 @@ export class TimeGridView extends ItemView {
 	}
 
 	private updateTime(now: Date): void {
-		this.timeHeatmap.update(now);
-		this.monthHeatmap.update(now);
-		this.dayGrid.update(now);
-		this.hourGrid.update(now);
-		this.dailyPieChart.update(now);
+		this.sundialTimeView.update(now);
 	}
 
 	private createModeButton(parent: HTMLElement, mode: TimeGridMode, icon: string, label: string): void {

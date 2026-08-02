@@ -11,6 +11,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 插件入口：`src/main.ts`
 - 主视图：`src/views/TimeGridView.ts`
 - UI 组件：
+  - `src/components/SundialTimeView.ts`：方案三“此刻回环”生产时间视图，组合长期轨迹、本月位置、日晷、内置计时器、快捷建议与今日去向，并呈现冲突、异常、写入失败和跨日恢复状态
   - `src/components/TimeHeatmap.ts`：近 3 个月、近 6 个月、近 1 年活动热力图
   - `src/components/MonthHeatmap.ts`：本月日期网格
   - `src/components/DayGrid.ts`：24 小时网格
@@ -25,6 +26,9 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 数据工具：
   - `src/utils/dailyNotes.ts`：打开或创建日记
   - `src/utils/dailyNotesParser.ts`：读取日记日期与 `simple-time-tracker` 数据
+  - `src/utils/timerFormat.ts`：计时名称、时间、代码块与建议显示的纯函数
+  - `src/utils/timerRepository.ts`：`simple-time-tracker` 唯一块定位、原子写回、冲突检测、跨日拆分和快捷建议数据访问
+  - `src/utils/timerController.ts`：空闲、运行、冲突、异常、恢复与写入失败状态编排
   - `src/utils/writingStats.ts`：统计启用后全库 Markdown 新增字数
   - `src/utils/icons.ts`：图标工具
   - `src/utils/taskParser.ts`：Tasks emoji 语法解析、状态语义、分区与排序纯函数
@@ -44,6 +48,13 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 
 - 插件默认注册并打开 Obsidian 右侧面板。
 - 主视图提供“时间 / 任务”双视图，首次默认时间视图并持久化最后选择；任务视图打开时暂停时间组件的每秒刷新，但任务索引与午夜重新分区继续工作。
+- 时间视图采用 Claude Design 方案三“此刻回环 · 日晷仪表”的生产布局；长期轨迹支持 3 个月、6 个月、1 年切换并记忆选择，默认 6 个月。
+- Time Grid 可以直接开始、停止和原子切换计时，但日记中的 `simple-time-tracker` JSON 仍是唯一数据真相源；插件数据只保存兼容的计时恢复指针。
+- 任一时刻只允许一个运行活动；多个运行项、多个计时块、异常 JSON 或异常插入标记一律进入诊断状态并拒绝自动写入。计时切换使用同一时间戳结束旧段并开始新段。
+- 无今日日记时仅在日记核心插件可用时按其配置与模板创建；无计时块时优先使用 `time-grid-timer-slot` 成对标记，否则在文末追加“时间记录”。所有修改经 `Vault.process()` 重新读取并只替换目标 JSON。
+- 运行计时在本地午夜拆分；关闭期间跨日不超过 24 小时自动补齐，超过 24 小时必须先选择补齐并继续、首个午夜结束或暂不处理。恢复决策前禁止开始新计时。
+- 快捷建议合并最近 7 天活动、今日/逾期任务和今日流程并去重；建议只贡献活动名称，计时操作不改变任务或每日流程状态。
+- 计时器写回造成的 Markdown 字符差异会从“新增字数”中扣除；真实 vault 计时写入必须由用户明确授权后再测试。
 - 活动热力图依赖日记和 `simple-time-tracker` 代码块计算计时时长。
 - 今日计时分布会区分无日记、无计时块、格式错误、空记录和有效记录；没有计时时仍显示默认空圆环。
 - `simple-time-tracker` 时长按当前日期边界裁剪，避免跨日计时污染单日统计。
@@ -64,15 +75,15 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 
 ## 当前进度
 
-截至 2026-08-01，项目处于可构建、可安装到 Obsidian vault 使用的阶段。当前重点进度记录如下：
+截至 2026-08-02，项目处于可构建、可安装到 Obsidian vault 使用的阶段。当前重点进度记录如下：
 
 - 基础插件骨架已完成：插件清单、TypeScript 入口、esbuild 构建、安装脚本和右侧面板注册流程已具备。
-- 核心时间可视化已完成：已包含近 3 个月、近 6 个月、近 1 年活动热力图、本月日期网格、24 小时网格和 60 分钟网格。
+- 核心时间可视化已完成日晷重组：包含可切换的近 3 个月、近 6 个月、近 1 年长期轨迹、本月位置、外圈今日进度、内圈当前小时、内置计时控制和今日去向。
 - 日记数据接入已完成：可以读取 Obsidian 日记，并解析 `simple-time-tracker` 代码块作为计时数据来源。
 - 今日计时分布已完成新版本：圆环图、中心总时长、空状态、格式异常状态、进行中状态、任务配色、Top 5 + 其他合并和图例悬停联动已实现。
 - 计时统计边界已修正：`simple-time-tracker` 时长会按当前日期边界裁剪，避免跨日记录影响单日统计。
 - 写作增量统计已具备：插件启用后为全库 Markdown 建立字数基线，并按日期记录新增字数。
-- 最新构建/安装状态：每日流程集成保持普通任务 `TaskWriter` 安全规则不变；51 项核心自动测试、24 次临时 Git vault 写入、生产打包和真实 Obsidian 非写入 UI 验收均已通过，最新构建已同步到 Aaron_Ob。
+- 最新构建/安装状态：日晷时间视图与内置计时器保持 Task 面板及任务写入规则不变；64 项核心自动测试、每日流程临时 Git vault 24 次写入、计时器临时 Git vault 9 次写入、生产打包均已通过；最终构建（`main.js` SHA-256 `235cc043…`）已同步到 Aaron_Ob 与 Documents Obsidian Vault。工作区改动尚未提交。
 - 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433。
 - 任务模块 Phase 2 已完成：四态菜单、完成/重新打开快捷按钮、终态日期、严格唯一定位、失败重扫和写作统计抑制已接入；异常、未知状态、循环和重复任务保持只读或拒写。
 - 任务模块 Phase 3 已完成：支持编辑描述、到期日、优先级和长期标签；失败时弹窗保持打开并提供可复制错误；只读任务只显示诊断和源文件入口。
@@ -225,3 +236,27 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/utils/taskParser.ts`、`src/utils/taskIndex.ts`、`tests/taskCore.test.ts`
 - 验证方式：`npm test` 52 项核心用例和临时 Git vault 24 次写入通过；`npm run build`、`git diff --check` 通过。Aaron_Ob 重载新版插件后总任务由 345 降为 285、活跃由 204 降为 144、待分类由 177 降为 117，恰好排除 60 个实际曾进入普通任务索引的占位项；搜索纯日期 `2026-02-25` 显示无匹配，全程未触发任务写回。
 - 后续注意事项：当前纯日期规则刻意只匹配完整 ISO 日期；含时间、说明或其他行动文字的任务不会被误排除。安装前回滚备份位于 `/private/tmp/time-grid-empty-task-backup.0mKDyO`。
+
+### 2026-08-02（日晷时间视图与内置计时器原型）
+
+- 修改等级：L0 设计原型与规格
+- 变更摘要：在 `Time Grid Design System 2` 保留三方案探索页，并将方案三“此刻回环”深化为独立高保真原型；加入日晷下方的手输、最近活动、今日任务和每日流程计时入口，以及空闲、运行、切换、自动准备、冲突、JSON 异常、并发写入失败和跨日恢复状态。原型支持 280/320/420/720px、深浅主题、键盘焦点和 reduced-motion，仅模拟交互，不写入日记。
+- 涉及文件：`Time Grid Design System 2/ui_kits/time-view-redesign/sundial-timer.html`、`Time Grid Design System 2/ui_kits/time-view-redesign/SUNDIAL_SPEC.md`、`Time Grid Design System 2/_ds_manifest.json`、`Time Grid Design System 2/readme.md`、`PROJECT_CONTEXT.md`
+- 验证方式：抽取内联 JavaScript 通过 `node --check`；Design System manifest 可解析且新卡片唯一；Chrome 实际渲染 280/320/420/720px 深浅主题，并检查空闲、运行、冲突和跨日恢复状态；`git diff --check` 通过。
+- 后续注意事项：本阶段未修改 `src/`、Task 面板或真实 vault。用户确认原型后，才进入 `TimerRepository`、`TimerController` 和生产日记写入实现。
+
+### 2026-08-02（日晷时间视图与内置计时器生产实现）
+
+- 修改等级：L3 跨模块改动
+- 变更摘要：按已确认的 Claude Design 方案三“此刻回环”重组生产时间视图，没有另行发挥视觉方案；新增 Time Grid 内直接开始、停止和原子切换计时，以及最近活动、今日/逾期任务和每日流程建议。计时数据继续兼容 `simple-time-tracker`，新增唯一代码块与插入标记校验、未知字段保留、冲突确认、跨午夜拆分、关闭恢复和超过 24 小时人工决策；计时写入从新增字数中扣除，Task 面板、任务写入和每日流程生命周期保持不变。
+- 涉及文件：`src/components/SundialTimeView.ts`、`src/types/timer.ts`、`src/utils/timerFormat.ts`、`src/utils/timerRepository.ts`、`src/utils/timerController.ts`、`src/main.ts`、`src/views/TimeGridView.ts`、`src/utils/dailyNotes.ts`、`src/utils/dailyNotesParser.ts`、`src/utils/writingStats.ts`、`src/types/task.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`tests/timerVault.integration.ts`、`scripts/run-timer-vault-tests.mjs`、`package.json`
+- 验证方式：`npm test` 通过 64 项核心用例、每日流程临时 Git vault 24 次写入和计时器临时 Git vault 9 次写入；计时集成覆盖自动创建、开始、停止、原子切换、未知字段及并发文本保留、冲突确认、跨午夜拆分和危险内容拒写。`npm run build`、`git diff --check` 通过。Aaron_Ob 的 Obsidian 1.12.7 深色约 320px 侧栏实际加载最终构建，确认日晷布局、干净的流程建议、官方空计时块状态和原 Task 视图统计；今日日记检查前后大小与修改时间不变，未执行真实计时写入。
+- 后续注意事项：两处真实 vault 已安装同哈希最终构建；旧插件备份位于 `/private/tmp/time-grid-sundial-backup-20260802/`。真实 vault 的开始、停止、切换及跨日写入仍需用户明确授权后再做冒烟测试。工作区改动尚未提交。
+
+### 2026-08-02（跨日恢复指针修复与双 vault 同步）
+
+- 修改等级：L1 局部修补
+- 变更摘要：修复超过 24 小时选择「补齐并继续」后仍因旧恢复指针重新进入 `recovery-required` 的问题；成功恢复后先清除指针再刷新，非单运行态也会清空指针。补充 `timeRange` / `timerRecovery` 数据迁移断言，并将最终构建同步到 Aaron_Ob 与 Documents Obsidian Vault。
+- 涉及文件：`src/utils/timerController.ts`、`tests/taskCore.test.ts`、`PROJECT_CONTEXT.md`
+- 验证方式：`npm test` 64 项核心用例、Routine 临时 vault 24 次写入、Timer 临时 vault 9 次写入通过；`npm run build`、`git diff --check` 通过；两处 vault 的 `main.js` / `styles.css` SHA-256 与工作区一致。
+- 后续注意事项：重载 Obsidian 后才会看到最新 JS；真实计时写入仍需用户明确授权。如需入库，请明确要求创建提交。
