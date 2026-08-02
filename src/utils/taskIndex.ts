@@ -1,6 +1,6 @@
 import { App, TFile } from 'obsidian';
 import { TaskSection, TaskSettings, TGTask } from '../types/task';
-import { classifyTask, getTodayKey, isPathExcluded, parseTaskLine, sortTasks } from './taskParser';
+import { classifyTask, getTodayKey, hasMeaningfulTaskDescription, isPathExcluded, parseTaskLine, sortTasks } from './taskParser';
 import { DEFAULT_ROUTINE_DEFINITION_PATH } from '../types/routine';
 import { getRoutineTaskLineNumbers } from './routineFormat';
 
@@ -146,7 +146,7 @@ export class TaskIndex {
 			const line = item.position.start.line;
 			const raw = (lines[line] ?? '').replace(/\r$/, '');
 			return parseTaskLine(raw, file.path, line, this.today, settings.goalTag);
-		});
+		}).filter((task) => hasMeaningfulTaskDescription(task.description));
 	}
 
 	private notify(incrementRevision = true): void {

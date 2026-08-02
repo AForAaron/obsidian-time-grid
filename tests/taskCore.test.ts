@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import {
 	classifyTask,
 	getTaskStatusKind,
+	hasMeaningfulTaskDescription,
 	isPathExcluded,
 	parseTaskLine,
 	sortTasks,
@@ -64,6 +65,17 @@ test('maps the four supported status characters', () => {
 	assert.equal(getTaskStatusKind('x'), 'done');
 	assert.equal(getTaskStatusKind('-'), 'cancelled');
 	assert.equal(getTaskStatusKind('?'), 'unknown');
+});
+
+test('empty and date-only checkboxes are not meaningful tasks', () => {
+	const empty = parseTaskLine('- [ ] ', 'Daily.md', 0, '2026-08-02', '#goal');
+	const metadataOnly = parseTaskLine('- [ ] 📅 2026-08-02 ⏫', 'Daily.md', 1, '2026-08-02', '#goal');
+	const dateOnly = parseTaskLine('- [ ] 2026-02-25', 'Daily.md', 2, '2026-08-02', '#goal');
+	const datedAction = parseTaskLine('- [ ] 2026-02-25 复盘', 'Daily.md', 3, '2026-08-02', '#goal');
+	assert.equal(hasMeaningfulTaskDescription(empty.description), false);
+	assert.equal(hasMeaningfulTaskDescription(metadataOnly.description), false);
+	assert.equal(hasMeaningfulTaskDescription(dateOnly.description), false);
+	assert.equal(hasMeaningfulTaskDescription(datedAction.description), true);
 });
 
 test('keeps unknown statuses visible but blocking', () => {

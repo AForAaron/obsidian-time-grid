@@ -44,6 +44,8 @@ const METADATA_MARKERS = [
 	ROUTINE_ITEM_INSTANCE_PREFIX,
 ];
 
+const DATE_ONLY_DESCRIPTION = /^\d{4}-\d{2}-\d{2}$/;
+
 export function parseTaskLine(
 	raw: string,
 	filePath: string,
@@ -147,6 +149,11 @@ export function getTaskStatusKind(statusChar: string): TaskStatusKind {
 		default:
 			return 'unknown';
 	}
+}
+
+export function hasMeaningfulTaskDescription(description: string): boolean {
+	const normalized = description.trim();
+	return normalized.length > 0 && !DATE_ONLY_DESCRIPTION.test(normalized);
 }
 
 export function classifyTask(task: TGTask, today: string, goalTag: string): TaskSection {

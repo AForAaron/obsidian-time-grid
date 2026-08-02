@@ -79,7 +79,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 任务模块 Phase 4 已完成：支持删除二次确认、顺延一天、Shift 顺延一周，以及待分类“设为今天/设为长期”；无到期日不显示顺延。
 - 任务中心 UI 重设计已完成：顶部双视图切换、最后视图持久化、四统计卡、即时搜索、状态/优先级/来源组合筛选、过滤计数、未来三组、已结束合并、桌面完整浮层、触屏行内展开，以及统一 portal 状态菜单、更多菜单和筛选浮层均已接入。
 - 响应式样式使用任务视图容器查询，覆盖 `≤320px`、`321–520px`、`>520px`；极窄侧栏固定 2×2 统计与收口筛选，不再常驻编辑、顺延、删除按钮，深色与浅色均使用 Obsidian 主题变量和 `color-mix`。
-- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 51 个核心用例及独立临时 Git vault 集成验证；包含配置格式、稳定 ID、日期计划、模板迁移、幂等生成、历史排除、今天编辑、取消语义、提醒判断、重复/错日期只读、CRLF/BOM、并发旧版本拒写和任务卡视觉契约。
+- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 52 个核心用例及独立临时 Git vault 集成验证；包含配置格式、稳定 ID、日期计划、模板迁移、幂等生成、历史排除、今天编辑、取消语义、提醒判断、重复/错日期只读、CRLF/BOM、并发旧版本拒写、任务卡视觉契约和无行动描述任务过滤。
 
 ## 修改等级
 
@@ -217,3 +217,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/components/TaskPanel.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`
 - 验证方式：`npm test` 51 项核心用例和临时 Git vault 24 次写入通过；`npm run build`、设计系统 bundle 语法检查与 `git diff --check` 通过。Aaron_Ob 中重新加载插件后确认新版 DOM 为 54 个 `.tg-task-status-control` 与 54 个内部标签，首个可见标签计算尺寸为 `38×18px`，背景透明、无阴影、边框 1px；四态菜单可打开并用 Esc 关闭，全程未执行任务写入。
 - 后续注意事项：仅复制新构建文件不足以刷新已打开的插件实例；需要关闭/开启 Time Grid 插件或重启 Obsidian。旧安装产物的临时回滚备份位于 `/private/tmp/time-grid-ui-backup.wyBEyk`。
+
+### 2026-08-02（空 checkbox 与纯日期占位过滤）
+
+- 修改等级：L1 索引过滤修补
+- 变更摘要：普通任务索引现在要求 checkbox 具有可执行的行动描述；纯空白、只含 Tasks 元数据以及描述严格等于 `YYYY-MM-DD` 的 checkbox 不再进入 Time Grid。日期后仍有行动文字（例如 `2026-02-25 复盘`）继续作为正常任务。过滤只影响 Time Grid 展示与统计，不删除或改写任何 Markdown；以后为占位 checkbox 补上描述后会由增量索引自动恢复为任务。
+- 涉及文件：`src/utils/taskParser.ts`、`src/utils/taskIndex.ts`、`tests/taskCore.test.ts`
+- 验证方式：`npm test` 52 项核心用例和临时 Git vault 24 次写入通过；`npm run build`、`git diff --check` 通过。Aaron_Ob 重载新版插件后总任务由 345 降为 285、活跃由 204 降为 144、待分类由 177 降为 117，恰好排除 60 个实际曾进入普通任务索引的占位项；搜索纯日期 `2026-02-25` 显示无匹配，全程未触发任务写回。
+- 后续注意事项：当前纯日期规则刻意只匹配完整 ISO 日期；含时间、说明或其他行动文字的任务不会被误排除。安装前回滚备份位于 `/private/tmp/time-grid-empty-task-backup.0mKDyO`。
