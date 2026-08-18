@@ -48,7 +48,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 
 - 插件默认注册并打开 Obsidian 右侧面板。
 - 主视图提供“时间 / 任务”双视图，首次默认时间视图并持久化最后选择；任务视图打开时暂停时间组件的每秒刷新，但任务索引与午夜重新分区继续工作。
-- 时间视图采用 Claude Design 方案三“此刻回环 · 日晷仪表”的生产布局；长期轨迹支持 3 个月、6 个月、1 年切换并记忆选择，默认 6 个月。
+- 时间视图采用 Claude Design 方案三“此刻回环 · 日晷仪表”的生产布局；计时控制面板的视觉与 DOM 真相源为 `Time Grid Design System 3` 的 TimerPanel / Button / SuggestionChips。长期轨迹支持 3 个月、6 个月、1 年切换并记忆选择，默认 6 个月。
 - Time Grid 可以直接开始、停止和原子切换计时，但日记中的 `simple-time-tracker` JSON 仍是唯一数据真相源；插件数据只保存兼容的计时恢复指针。
 - 任一时刻只允许一个运行活动；多个运行项、多个计时块、异常 JSON 或异常插入标记一律进入诊断状态并拒绝自动写入。计时切换使用同一时间戳结束旧段并开始新段。
 - 无今日日记时仅在日记核心插件可用时按其配置与模板创建；无计时块时优先使用 `time-grid-timer-slot` 成对标记，否则在文末追加“时间记录”。所有修改经 `Vault.process()` 重新读取并只替换目标 JSON。
@@ -260,3 +260,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/utils/timerController.ts`、`tests/taskCore.test.ts`、`PROJECT_CONTEXT.md`
 - 验证方式：`npm test` 64 项核心用例、Routine 临时 vault 24 次写入、Timer 临时 vault 9 次写入通过；`npm run build`、`git diff --check` 通过；两处 vault 的 `main.js` / `styles.css` SHA-256 与工作区一致。
 - 后续注意事项：重载 Obsidian 后才会看到最新 JS；真实计时写入仍需用户明确授权。如需入库，请明确要求创建提交。
+
+### 2026-08-18（Design System 3 计时 UI 替换）
+
+- 修改等级：L2 功能增强（展示层）
+- 变更摘要：以 `Time Grid Design System 3` 的 TimerPanel / Button / SuggestionChips 为真相源，替换生产计时控制面板的 DOM 与样式；采用四级按钮、运行态独立停止行、更大等宽累计时长、芯片建议区与 `@container tgtimer` 窄屏布局。修复运行态脉冲点错误调用 `document.createSpan()` 导致的 `HierarchyRequestError`，并让安装脚本在复制失败时立即退出且校验样式文件。计时写入逻辑、Task 面板与每日流程不变。
+- 涉及文件：`src/components/SundialTimeView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`install.sh`、`PROJECT_CONTEXT.md`、`.gitignore`、`Time Grid Design System 3/`
+- 验证方式：`npm test` 64 项核心用例、Routine 临时 vault 24 次写入、Timer 临时 vault 9 次写入通过；`npm run build`、`git diff --check`、`bash -n install.sh` 通过。最终构建安装到 `/Users/aaron/Documents/Obsidian Vault` 并与工作区 SHA-256 一致；在约 239px 的 Obsidian 侧栏通过内存快照验证空闲、运行、切换反馈、冲突、写入失败和跨日恢复，所有面板无横向溢出。
+- 后续注意事项：QA 状态仅替换运行时内存快照，已恢复真实空闲控制器；测试 vault 未创建或修改任何日记，真实计时写入仍需用户明确授权。

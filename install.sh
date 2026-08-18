@@ -1,8 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Time Grid 插件安装脚本
 
-if [ -z "$1" ]; then
+if [ "$#" -lt 1 ] || [ -z "${1:-}" ]; then
     echo "用法: ./install.sh <Obsidian_Vault_Path>"
     echo "示例: ./install.sh ~/Documents/MyVault"
     exit 1
@@ -11,6 +13,15 @@ fi
 VAULT_PATH="$1"
 PLUGIN_DIR="$VAULT_PATH/.obsidian/plugins/time-grid"
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ -f "$CURRENT_DIR/styles.css" ]; then
+    STYLE_SOURCE="$CURRENT_DIR/styles.css"
+elif [ -f "$CURRENT_DIR/src/styles/main.css" ]; then
+    STYLE_SOURCE="$CURRENT_DIR/src/styles/main.css"
+else
+    echo "错误: 未找到 styles.css 或 src/styles/main.css"
+    exit 1
+fi
 
 # 检查 vault 目录是否存在
 if [ ! -d "$VAULT_PATH" ]; then
@@ -32,14 +43,10 @@ mkdir -p "$PLUGIN_DIR"
 echo "复制插件文件..."
 cp "$CURRENT_DIR/main.js" "$PLUGIN_DIR/"
 cp "$CURRENT_DIR/manifest.json" "$PLUGIN_DIR/"
-if [ -f "$CURRENT_DIR/styles.css" ]; then
-	cp "$CURRENT_DIR/styles.css" "$PLUGIN_DIR/"
-elif [ -f "$CURRENT_DIR/src/styles/main.css" ]; then
-	cp "$CURRENT_DIR/src/styles/main.css" "$PLUGIN_DIR/styles.css"
-fi
+cp "$STYLE_SOURCE" "$PLUGIN_DIR/styles.css"
 
 # 检查文件是否复制成功
-if [ -f "$PLUGIN_DIR/main.js" ] && [ -f "$PLUGIN_DIR/manifest.json" ]; then
+if [ -f "$PLUGIN_DIR/main.js" ] && [ -f "$PLUGIN_DIR/manifest.json" ] && [ -f "$PLUGIN_DIR/styles.css" ]; then
     echo "✅ 插件安装成功！"
     echo ""
     echo "下一步："

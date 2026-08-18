@@ -1,0 +1,22 @@
+<!-- @dsCard group="Components" viewport="640x360" name="Action Buttons" subtitle="Primary / Neutral / Danger-quiet / Quiet — the 4-tier hierarchy, sizes, focus ring" -->
+<html><head><link rel="stylesheet" href="../../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../../_ds_bundle.js"></script>
+<style>body{margin:0;background:var(--surface-app);padding:22px;font-family:var(--font-ui)}.row{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}.row-label{width:150px;flex:0 0 auto;font-size:11px;color:var(--text-faint)}.dim{font-size:11px;color:var(--text-faint);margin-top:20px;line-height:1.6;max-width:520px}</style>
+</head><body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { Button } = window.TimeGridDesignSystem_80c9b5;
+const Play = () => <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M7 4l14 8-14 8z"/></svg>;
+const Stop = () => <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>;
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment>
+  <div className="row"><span className="row-label">Primary · 36px</span><Button variant="primary" icon={<Play/>}>开始</Button><Button variant="primary">补齐并继续</Button><Button variant="primary" disabled icon={<Play/>}>开始</Button></div>
+  <div className="row"><span className="row-label">Neutral / Switch · 36px</span><Button variant="neutral">切换</Button><Button variant="neutral">首个午夜结束</Button><Button variant="neutral" disabled>切换</Button></div>
+  <div className="row"><span className="row-label">Danger quiet · 36px</span><Button variant="danger-quiet" icon={<Stop/>}>停止</Button><Button variant="danger-quiet">结束全部并继续</Button></div>
+  <div className="row"><span className="row-label">Quiet · 30px</span><Button variant="quiet">打开今日日记</Button><Button variant="quiet">暂不处理</Button><Button variant="quiet">重新读取并重试</Button></div>
+  <div className="dim">Tab 到任意按钮可见 2px 紫色 focus-visible 焦点环；禁用态透明度 0.5、指针不可用。四级只对应四种语气：主张（primary）、可逆操作（neutral）、终止/危险但克制（danger-quiet）、安静的旁路操作（quiet）——不用开关、分段控件或 FAB。</div>
+</React.Fragment>);
+</script>
+</body></html>

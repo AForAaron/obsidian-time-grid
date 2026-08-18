@@ -3,5 +3,9 @@ node_modules/
 main.js
 main.js.map
 styles.css
+!Time Grid Design System 3/styles.css
 *.log
 Time Grid Design System.zip
+Time Grid Design System*/.thumbnail
+Time Grid Design System*/screenshots/
+Time Grid Design System*/uploads/

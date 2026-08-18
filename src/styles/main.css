@@ -15,11 +15,18 @@
 	--tg-muted: var(--tg-text-muted);
 	--tg-border: var(--tg-border-default);
 	--tg-accent: var(--interactive-accent);
+	--tg-accent-strong: color-mix(in srgb, var(--interactive-accent) 72%, white);
 	--tg-today-ring: color-mix(in srgb, #ffd166 86%, var(--text-normal));
 	--tg-heat-1: color-mix(in srgb, var(--tg-accent) 30%, var(--tg-surface-panel));
 	--tg-heat-2: color-mix(in srgb, var(--tg-accent) 45%, var(--tg-surface-panel));
 	--tg-heat-3: color-mix(in srgb, var(--tg-accent) 63%, var(--tg-surface-panel));
 	--tg-heat-4: color-mix(in srgb, var(--tg-accent) 86%, white);
+	--tg-text-2xs: 10px;
+	--tg-text-xs: 11px;
+	--tg-text-sm: 12px;
+	--tg-text-base: 13px;
+	--tg-text-lg: 16px;
+	--tg-duration-pulse: 1.6s;
 	--tg-viz-0: #7f6ec8;
 	--tg-viz-1: #5f92b8;
 	--tg-viz-2: #78a886;
@@ -3011,10 +3018,7 @@
 
 .tg-sundial-range-button:focus-visible,
 .tg-sundial-calendar-day:focus-visible,
-.tg-sundial-heat-cell:focus-visible,
-.tg-sundial-suggestion:focus-visible,
-.tg-sundial-action:focus-visible,
-.tg-sundial-timer-input:focus-visible {
+.tg-sundial-heat-cell:focus-visible {
 	outline: 2px solid var(--tg-accent);
 	outline-offset: 2px;
 }
@@ -3257,179 +3261,314 @@
 	font-variant-numeric: tabular-nums;
 }
 
-.tg-sundial-timer-panel {
-	min-width: 0;
-	margin-top: 13px;
-	padding: 11px;
-	border: 1px solid var(--tg-border-default);
-	border-radius: 8px;
-	background: var(--tg-surface-panel);
-}
-
-.tg-sundial-timer-panel.is-running {
-	border-color: color-mix(in srgb, var(--tg-today-ring) 35%, var(--tg-border-default));
-}
-
-.tg-sundial-timer-panel.is-error {
-	border-color: color-mix(in srgb, var(--tg-viz-4) 60%, var(--tg-border-default));
-}
-
-.tg-sundial-timer-panel.is-busy { opacity: .72; }
-
-.tg-sundial-timer-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	margin-bottom: 9px;
-}
-
-.tg-sundial-timer-eyebrow {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	color: var(--tg-text-muted);
-	font-size: 10px;
-	font-weight: 600;
-	letter-spacing: .04em;
-}
-
-.tg-sundial-live-dot {
-	display: inline-block;
-	width: 6px;
-	height: 6px;
-	margin-left: 5px;
-	border-radius: 50%;
-	background: var(--tg-today-ring);
-	flex: none;
-}
-
-.tg-sundial-timer-elapsed {
-	color: var(--tg-text-primary);
-	font-family: var(--font-monospace);
-	font-size: 12px;
-	font-variant-numeric: tabular-nums;
-}
-
-.tg-sundial-timer-form {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 6px;
-}
-
-.tg-sundial-timer-input {
-	min-width: 0;
-	height: 36px;
-	margin: 0;
-	padding: 0 10px;
-	border: 1px solid var(--tg-border-default);
-	border-radius: 6px;
-	background: var(--tg-surface-sunken);
-	box-shadow: none;
-	color: var(--tg-text-primary);
-	font-size: 11.5px;
-}
-
-.tg-sundial-timer-input::placeholder { color: var(--tg-text-faint); }
-
-.tg-sundial-action {
+/* Design System 3 — Button / Chip / Timer Panel */
+.tg-btn {
 	appearance: none;
 	-webkit-appearance: none;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 5px;
-	min-height: 36px;
+	gap: 6px;
+	height: 36px;
 	margin: 0;
-	padding: 0 12px;
-	border: 1px solid var(--tg-border-default);
+	padding: 0 14px;
+	border: 1px solid transparent;
 	border-radius: 6px;
 	background: transparent;
 	background-image: none;
 	box-shadow: none;
 	color: var(--tg-text-primary);
-	font-size: 11px;
+	font-family: inherit;
+	font-size: var(--tg-text-sm);
 	font-weight: 600;
+	white-space: nowrap;
 	cursor: pointer;
+	transition: background var(--tg-duration-fast) ease, transform var(--tg-duration-fast) ease;
 }
 
-.tg-sundial-action:hover { background: var(--tg-surface-hover); }
-.tg-sundial-action.primary { border-color: var(--tg-accent); background: var(--tg-accent); color: white; }
-.tg-sundial-action.danger { border-color: color-mix(in srgb, var(--tg-viz-4) 55%, var(--tg-border-default)); color: var(--tg-viz-4); }
-.tg-sundial-action.quiet { min-height: 30px; padding: 0 9px; font-size: 10px; font-weight: 500; }
+.tg-btn:disabled { opacity: .5; cursor: not-allowed; }
+.tg-btn:focus-visible { outline: 2px solid var(--tg-accent-strong); outline-offset: 2px; }
+.tg-btn-icon { display: inline-flex; line-height: 0; }
+.tg-btn-icon svg { display: block; }
 
-.tg-sundial-play-icon {
-	width: 0;
-	height: 0;
-	border-top: 4px solid transparent;
-	border-bottom: 4px solid transparent;
-	border-left: 6px solid currentColor;
+.tg-btn-primary {
+	border-color: var(--tg-accent);
+	background: var(--tg-accent);
+	color: #fff;
 }
 
-.tg-sundial-stop-icon {
-	width: 7px;
-	height: 7px;
-	border-radius: 1px;
-	background: currentColor;
+.tg-btn-primary:hover:not(:disabled) {
+	border-color: var(--tg-accent-strong);
+	background: var(--tg-accent-strong);
 }
 
-.tg-sundial-running-main {
+.tg-btn-neutral {
+	border-color: var(--tg-border-default);
+	background: transparent;
+	color: var(--tg-text-primary);
+}
+
+.tg-btn-neutral:hover:not(:disabled) { background: var(--tg-surface-hover); }
+
+.tg-btn-danger-quiet {
+	border-color: var(--tg-status-overdue);
+	background: transparent;
+	color: var(--tg-status-overdue);
+}
+
+.tg-btn-danger-quiet:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--tg-status-overdue) 12%, transparent);
+}
+
+.tg-btn-quiet {
+	height: 30px;
+	padding: 0 10px;
+	border-color: transparent;
+	background: transparent;
+	color: var(--tg-text-muted);
+	font-weight: 500;
+}
+
+.tg-btn-quiet:hover:not(:disabled) {
+	background: var(--tg-surface-hover);
+	color: var(--tg-text-primary);
+}
+
+.tg-chip-groups {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px 18px;
+}
+
+.tg-chip-group {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.tg-chip-group-label {
+	flex: 0 0 auto;
+	color: var(--tg-text-faint);
+	font-size: 8.5px;
+	font-weight: 600;
+	letter-spacing: .05em;
+	text-transform: uppercase;
+}
+
+.tg-chip {
+	appearance: none;
+	-webkit-appearance: none;
+	height: 27px;
+	margin: 0;
+	padding: 0 11px;
+	border: 1px solid var(--tg-border-default);
+	border-radius: var(--tg-radius-pill);
+	background: transparent;
+	background-image: none;
+	box-shadow: none;
+	color: var(--tg-text-muted);
+	font-family: inherit;
+	font-size: var(--tg-text-xs);
+	cursor: pointer;
+	transition: transform var(--tg-duration-fast) ease, background var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease;
+}
+
+.tg-chip:hover {
+	transform: translateY(-1px);
+	background: var(--tg-surface-hover);
+	color: var(--tg-text-primary);
+}
+
+.tg-chip:focus-visible { outline: 2px solid var(--tg-accent-strong); outline-offset: 2px; }
+
+@container tgtimer (max-width: 300px) {
+	.tg-chip-groups {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 8px;
+	}
+}
+
+.tg-timer-panel {
+	container: tgtimer / inline-size;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-width: 0;
+	margin-top: 13px;
+	padding: 12px 13px;
+	border: 1px solid var(--tg-border-default);
+	border-radius: var(--tg-radius-md);
+	background: var(--tg-surface-panel);
+	color: var(--tg-text-primary);
+	font-family: inherit;
+}
+
+.tg-timer-panel.running {
+	border-color: color-mix(in srgb, var(--tg-today-ring) 45%, var(--tg-border-default));
+}
+
+.tg-timer-panel.error {
+	border-color: color-mix(in srgb, var(--tg-status-overdue) 45%, var(--tg-border-default));
+}
+
+.tg-timer-panel.is-busy { opacity: .72; }
+
+.tg-timer-eyebrow {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	color: var(--tg-text-muted);
+	font-size: var(--tg-text-xs);
+	font-weight: 600;
+}
+
+.tg-timer-live-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--tg-today-ring);
+	flex: none;
+}
+
+.tg-timer-idle-row,
+.tg-timer-switch-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.tg-timer-input {
+	flex: 1;
+	min-width: 120px;
+	height: 36px;
+	margin: 0;
+	padding: 0 12px;
+	border: 1px solid var(--tg-border-default);
+	border-radius: 6px;
+	background: var(--tg-surface-sunken);
+	box-shadow: none;
+	color: var(--tg-text-primary);
+	font-family: inherit;
+	font-size: var(--tg-text-sm);
+}
+
+.tg-timer-input::placeholder { color: var(--tg-text-faint); }
+.tg-timer-input:focus-visible { outline: 2px solid var(--tg-accent-strong); outline-offset: 1px; }
+
+.tg-timer-hint {
+	color: var(--tg-text-faint);
+	font-size: var(--tg-text-2xs);
+	line-height: 1.55;
+}
+
+.tg-timer-running-main {
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
 	gap: 10px;
-	margin-bottom: 9px;
 }
 
-.tg-sundial-running-info { min-width: 0; }
-.tg-sundial-running-name { min-width: 0; overflow: hidden; color: var(--tg-text-primary); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.tg-sundial-running-since { margin-top: 3px; color: var(--tg-text-faint); font-size: 9.5px; }
-.tg-sundial-switch-label { margin: 10px 0 6px; color: var(--tg-text-faint); font-size: 9.5px; }
-
-.tg-sundial-suggestions {
+.tg-timer-activity {
 	display: flex;
 	flex-direction: column;
-	gap: 7px;
-	margin-top: 9px;
+	gap: 2px;
+	min-width: 0;
 }
 
-.tg-sundial-suggestion-group { display: flex; align-items: flex-start; gap: 7px; }
-.tg-sundial-suggestion-label { width: 34px; padding-top: 5px; color: var(--tg-text-faint); font-size: 8.5px; flex: none; }
-.tg-sundial-suggestion-list { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
-
-.tg-sundial-suggestion {
-	max-width: 150px;
-	min-height: 27px;
-	margin: 0;
-	padding: 4px 8px;
+.tg-timer-activity-name {
 	overflow: hidden;
-	border: 1px solid var(--tg-border-subtle);
-	border-radius: 999px;
-	background: transparent;
-	box-shadow: none;
-	color: var(--tg-text-muted);
-	font-size: 9.5px;
+	color: var(--tg-text-primary);
+	font-size: var(--tg-text-base);
+	font-weight: 600;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	cursor: pointer;
 }
 
-.tg-sundial-suggestion:hover { border-color: var(--tg-border-default); background: var(--tg-surface-hover); color: var(--tg-text-primary); }
-.tg-sundial-timer-helper { margin-top: 7px; color: var(--tg-text-faint); font-size: 9.5px; line-height: 1.45; }
+.tg-timer-activity-meta {
+	color: var(--tg-text-faint);
+	font-size: var(--tg-text-2xs);
+}
 
-.tg-sundial-notice {
-	padding: 10px;
-	border: 1px solid var(--tg-border-default);
+.tg-timer-elapsed {
+	flex: 0 0 auto;
+	color: var(--tg-text-primary);
+	font-family: var(--font-monospace);
+	font-size: var(--tg-text-lg);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.tg-timer-switch-label {
+	color: var(--tg-text-faint);
+	font-size: var(--tg-text-2xs);
+}
+
+.tg-timer-notice {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 11px;
 	border-radius: 6px;
 	background: var(--tg-surface-sunken);
 }
 
-.tg-sundial-notice-title { color: var(--tg-text-primary); font-size: 11.5px; font-weight: 650; }
-.tg-sundial-notice-copy { margin-top: 5px; color: var(--tg-text-muted); font-size: 10px; line-height: 1.5; }
-.tg-sundial-notice-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-.tg-sundial-notice-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--tg-text-muted); font-size: 10px; }
-.tg-sundial-notice-row strong { color: var(--tg-text-primary); font-weight: 550; }
-.tg-sundial-notice-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.tg-timer-notice-title {
+	color: var(--tg-text-primary);
+	font-size: var(--tg-text-sm);
+	font-weight: 600;
+}
+
+.tg-timer-notice-body {
+	color: var(--tg-text-muted);
+	font-size: var(--tg-text-xs);
+	line-height: 1.6;
+}
+
+.tg-timer-conflict-list,
+.tg-timer-recovery-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	margin-top: 2px;
+}
+
+.tg-timer-conflict-row,
+.tg-timer-recovery-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 6px 0;
+	border-top: 1px solid var(--tg-border-subtle);
+	color: var(--tg-text-primary);
+	font-size: var(--tg-text-xs);
+	font-variant-numeric: tabular-nums;
+}
+
+.tg-timer-conflict-row:first-child,
+.tg-timer-recovery-row:first-child { border-top: none; }
+
+.tg-timer-recovery-role {
+	flex: 0 0 auto;
+	color: var(--tg-text-faint);
+}
+
+.tg-timer-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+@container tgtimer (max-width: 300px) {
+	.tg-timer-idle-row,
+	.tg-timer-switch-row { flex-direction: column; }
+	.tg-timer-idle-row .tg-btn,
+	.tg-timer-switch-row .tg-btn,
+	.tg-timer-actions .tg-btn { width: 100%; }
+	.tg-timer-actions { flex-direction: column; }
+	.tg-timer-running-main { flex-direction: column; gap: 6px; }
+}
 
 .tg-sundial-activity-bar {
 	display: flex;
@@ -3475,8 +3614,12 @@
 .tg-sundial-tooltip strong { display: block; font-weight: 600; }
 
 @media (prefers-reduced-motion: no-preference) {
-	.tg-sundial-live-dot,
+	.tg-timer-live-dot { animation: tg-pulse var(--tg-duration-pulse) ease infinite; }
 	.tg-sundial-dial-now { animation: tg-sundial-quiet-pulse 1.8s ease-in-out infinite; }
+	@keyframes tg-pulse {
+		0%, 100% { opacity: 1; transform: scale(1); }
+		50% { opacity: .35; transform: scale(.65); }
+	}
 	@keyframes tg-sundial-quiet-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 }
 
@@ -3489,9 +3632,7 @@
 	.tg-sundial-range-button { padding-inline: 6px; }
 	.tg-sundial-dial { width: 210px; }
 	.tg-sundial-clock { font-size: 17px; }
-	.tg-sundial-timer-panel { padding: 9px; }
-	.tg-sundial-suggestion-group { display: block; }
-	.tg-sundial-suggestion-label { display: block; width: auto; margin-bottom: 4px; padding: 0; }
+	.tg-timer-panel { padding: 9px; }
 	.tg-sundial-activity-value { font-size: 9px; }
 }
 
@@ -3499,16 +3640,15 @@
 	.tg-sundial-root { gap: 18px; padding: 18px; }
 	.tg-sundial-dial { width: 292px; }
 	.tg-sundial-clock { font-size: 21px; }
-	.tg-sundial-timer-panel { padding: 13px; }
+	.tg-timer-panel { padding: 13px; }
 	.tg-sundial-calendar-day { font-size: 10px; }
-	.tg-sundial-suggestion-label { width: 42px; }
 }
 
 @container tg-sundial (min-width: 680px) {
 	.tg-sundial-root { gap: 20px; padding: 20px; }
 	.tg-sundial-context { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(210px, .6fr); gap: 22px; align-items: start; }
 	.tg-sundial-now-zone { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .85fr); gap: 24px; align-items: center; }
-	.tg-sundial-timer-panel { margin-top: 0; }
+	.tg-timer-panel { margin-top: 0; }
 	.tg-sundial-activity-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
 	.tg-sundial-dial { width: 322px; }
 }

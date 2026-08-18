@@ -12,6 +12,11 @@ interface SundialTimeViewOptions {
 	onOpenToday: () => void;
 }
 
+type ButtonVariant = 'primary' | 'neutral' | 'danger-quiet' | 'quiet';
+
+const PLAY_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M7 4l14 8-14 8z"></path></svg>';
+const STOP_ICON = '<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"></rect></svg>';
+
 interface HeatDay {
 	date: Date;
 	dateKey: string;
@@ -87,7 +92,7 @@ export class SundialTimeView {
 		const caption = dialPanel.createDiv('tg-sundial-dial-caption');
 		this.clock = caption.createDiv('tg-sundial-clock');
 		this.dialSummary = caption.createDiv('tg-sundial-dial-summary');
-		this.timerPanel = nowZone.createEl('section', { cls: 'tg-sundial-timer-panel' });
+		this.timerPanel = nowZone.createEl('section', { cls: 'tg-timer-panel' });
 
 		this.activityBlock = this.root.createEl('section', { cls: 'tg-sundial-activity' });
 		this.tooltip = this.root.createDiv('tg-sundial-tooltip');
@@ -301,18 +306,18 @@ export class SundialTimeView {
 		const snapshot = this.timerController.getSnapshot();
 		this.timerPanel.empty();
 		this.timerElapsed = null;
-		this.timerPanel.removeClass('is-running', 'is-error');
+		this.timerPanel.removeClass('running', 'error');
 		if (snapshot.status === 'running') {
-			this.timerPanel.addClass('is-running');
+			this.timerPanel.addClass('running');
 			this.renderRunning(snapshot);
 		} else if (snapshot.status === 'conflict') {
-			this.timerPanel.addClass('is-error');
+			this.timerPanel.addClass('error');
 			this.renderConflict(snapshot);
 		} else if (snapshot.status === 'invalid') {
-			this.timerPanel.addClass('is-error');
+			this.timerPanel.addClass('error');
 			this.renderInvalid(snapshot);
 		} else if (snapshot.status === 'write-error') {
-			this.timerPanel.addClass('is-error');
+			this.timerPanel.addClass('error');
 			this.renderWriteError(snapshot);
 		} else if (snapshot.status === 'recovery-required') {
 			this.renderRecovery(snapshot);
@@ -323,103 +328,100 @@ export class SundialTimeView {
 	}
 
 	private renderIdle(snapshot: TimerSnapshot): void {
-		this.createTimerHeader('开始计时');
-		this.createStartForm('此刻在做什么？', '开始');
+		this.createEyebrow('开始计时');
+		this.createStartRow('此刻在做什么？', '开始', 'primary', true);
 		if (snapshot.preparation === 'no-diary') {
-			this.timerPanel.createDiv({ cls: 'tg-sundial-timer-helper', text: '开始后将创建今日日记，并写入“时间记录”计时块。' });
+			this.timerPanel.createDiv({ cls: 'tg-timer-hint', text: '无日记：开始后将创建今日日记并写入时间记录' });
 		} else if (snapshot.preparation === 'no-tracker') {
-			this.timerPanel.createDiv({ cls: 'tg-sundial-timer-helper', text: '开始后将写入模板标记；没有标记时追加到日记末尾。' });
+			this.timerPanel.createDiv({ cls: 'tg-timer-hint', text: '无计时块：开始后写入模板标记；无标记则追加到文末' });
 		}
 		this.renderSuggestions();
 	}
 
 	private renderRunning(snapshot: TimerSnapshot): void {
 		const entry = snapshot.runningEntries[0];
-		const elapsed = document.createElement('div');
-		elapsed.className = 'tg-sundial-timer-elapsed';
-		this.timerElapsed = elapsed;
-		const header = this.createTimerHeader('正在计时', elapsed);
-		header.querySelector('.tg-sundial-timer-eyebrow')?.prepend(this.liveDot());
-		const main = this.timerPanel.createDiv('tg-sundial-running-main');
-		const info = main.createDiv('tg-sundial-running-info');
-		info.createDiv({ cls: 'tg-sundial-running-name', text: entry.name });
-		info.createDiv({ cls: 'tg-sundial-running-since', text: `开始于 ${formatClock(new Date(entry.startTime)).slice(0, 5)} · 关闭 Obsidian 后仍继续` });
-		const stop = main.createEl('button', { cls: 'tg-sundial-action danger', attr: { type: 'button' } });
-		stop.createSpan('tg-sundial-stop-icon');
-		stop.appendText('停止');
-		stop.addEventListener('click', () => void this.runAction(() => this.timerController.stop()));
-		if (this.switchMessage) this.timerPanel.createDiv({ cls: 'tg-sundial-timer-helper', text: this.switchMessage });
-		this.timerPanel.createDiv({ cls: 'tg-sundial-switch-label', text: '切换活动 · 开始新活动会自动结束当前活动' });
-		this.createStartForm('输入新的活动', '切换');
+		const eyebrow = this.createEyebrow('正在计时');
+		eyebrow.appendChild(this.liveDot());
+		const main = this.timerPanel.createDiv('tg-timer-running-main');
+		const activity = main.createDiv('tg-timer-activity');
+		activity.createSpan({ cls: 'tg-timer-activity-name', text: entry.name });
+		activity.createSpan({
+			cls: 'tg-timer-activity-meta',
+			text: `开始于 ${formatClock(new Date(entry.startTime)).slice(0, 5)} · 关闭 Obsidian 后仍继续`,
+		});
+		this.timerElapsed = main.createDiv({ cls: 'tg-timer-elapsed', text: formatElapsed(Date.now() - Date.parse(entry.startTime)) });
+		const actions = this.timerPanel.createDiv('tg-timer-actions');
+		this.createButton(actions, 'danger-quiet', '停止', () => void this.runAction(() => this.timerController.stop()), STOP_ICON);
+		this.timerPanel.createDiv({ cls: 'tg-timer-switch-label', text: '切换活动 · 开始新活动会自动结束当前活动' });
+		this.createStartRow('输入新的活动', '切换', 'neutral', false);
+		if (this.switchMessage) this.timerPanel.createDiv({ cls: 'tg-timer-hint', text: this.switchMessage });
 		this.renderSuggestions();
 	}
 
 	private renderConflict(snapshot: TimerSnapshot): void {
-		this.createTimerHeader('计时冲突');
-		const card = this.createNotice('发现多个活动正在运行', 'Time Grid 不会自动覆盖。结束全部后，才能开始新的活动。');
-		const list = card.createDiv('tg-sundial-notice-list');
+		this.createEyebrow('计时冲突');
+		const notice = this.createNotice('发现多个活动正在运行', 'Time Grid 不会自动覆盖。结束全部后，才能开始新的活动。');
+		const list = notice.createDiv('tg-timer-conflict-list');
 		for (const entry of snapshot.runningEntries) {
-			const row = list.createDiv('tg-sundial-notice-row');
-			row.createEl('strong', { text: entry.name });
-			row.createSpan({ text: formatElapsed(Date.now() - Date.parse(entry.startTime)) });
+			const row = list.createDiv('tg-timer-conflict-row');
+			row.createSpan({ text: entry.name });
+			row.createSpan({ cls: 'tg-timer-recovery-role', text: formatElapsed(Date.now() - Date.parse(entry.startTime)) });
 		}
-		const actions = card.createDiv('tg-sundial-notice-actions');
-		this.noticeButton(actions, '结束全部并继续', 'danger', () => void this.runAction(() => this.timerController.resolveConflict()));
-		this.noticeButton(actions, '打开今日日记', '', () => this.options.onOpenToday());
+		const actions = this.timerPanel.createDiv('tg-timer-actions');
+		this.createButton(actions, 'danger-quiet', '结束全部并继续', () => void this.runAction(() => this.timerController.resolveConflict()));
+		this.createButton(actions, 'quiet', '打开今日日记', () => this.options.onOpenToday());
 	}
 
 	private renderInvalid(snapshot: TimerSnapshot): void {
-		this.createTimerHeader('计时不可用');
-		const card = this.createNotice('simple-time-tracker 格式有误', snapshot.message ?? '原文保持不变。修复 JSON 后，Time Grid 会重新读取计时状态。');
-		const actions = card.createDiv('tg-sundial-notice-actions');
-		this.noticeButton(actions, '打开今日日记', '', () => this.options.onOpenToday());
+		this.createEyebrow('计时不可用');
+		this.createNotice(snapshot.message ?? 'simple-time-tracker 格式有误', '原文保持不变。修复后会重新读取。');
+		const actions = this.timerPanel.createDiv('tg-timer-actions');
+		this.createButton(actions, 'quiet', '打开今日日记', () => this.options.onOpenToday());
 	}
 
 	private renderWriteError(snapshot: TimerSnapshot): void {
-		this.createTimerHeader('写入失败');
-		const card = this.createNotice('日记在写入前发生变化', snapshot.message ?? '没有覆盖新的内容。重新读取后可以安全重试。');
-		const actions = card.createDiv('tg-sundial-notice-actions');
-		this.noticeButton(actions, '重新读取并重试', '', () => void this.runAction(() => this.timerController.refreshNow().then(() => ({ ok: true }))));
-		this.noticeButton(actions, '打开今日日记', '', () => this.options.onOpenToday());
+		this.createEyebrow('写入失败');
+		this.createNotice(snapshot.message ?? '日记在写入前发生变化', '没有覆盖新内容。可重新读取后重试。');
+		const actions = this.timerPanel.createDiv('tg-timer-actions');
+		this.createButton(actions, 'quiet', '重新读取并重试', () => void this.runAction(() => this.timerController.refreshNow().then(() => ({ ok: true }))));
+		this.createButton(actions, 'quiet', '打开今日日记', () => this.options.onOpenToday());
 	}
 
 	private renderRecovery(snapshot: TimerSnapshot): void {
-		this.createTimerHeader('跨日恢复');
+		this.createEyebrow('跨日恢复');
 		const recovery = snapshot.recovery;
 		if (!recovery) return;
-		const card = this.createNotice(
+		const notice = this.createNotice(
 			`“${recovery.pointer.name}”已持续 ${formatLongDuration(recovery.durationMs)}`,
-			`补齐将拆分计时并创建 ${Math.max(0, recovery.affectedDates.length - 1)} 篇缺失日记。确认前不会修改任何文件。`
+			'补齐将拆分计时并可能创建缺失日记；确认前不修改任何文件'
 		);
-		const list = card.createDiv('tg-sundial-notice-list');
+		const list = notice.createDiv('tg-timer-recovery-list');
 		recovery.affectedDates.forEach((date, index) => {
-			const row = list.createDiv('tg-sundial-notice-row');
-			row.createEl('strong', { text: displayDateKey(date) });
-			row.createSpan({ text: index === 0 ? '结束于 24:00' : index === recovery.affectedDates.length - 1 ? '从 00:00 继续' : '记录 24h' });
+			const row = list.createDiv('tg-timer-recovery-row');
+			row.createSpan({ text: displayDateKey(date) });
+			row.createSpan({
+				cls: 'tg-timer-recovery-role',
+				text: index === 0 ? '结束于 24:00' : index === recovery.affectedDates.length - 1 ? '从 00:00 继续' : '记录 24h',
+			});
 		});
-		const actions = card.createDiv('tg-sundial-notice-actions');
-		this.noticeButton(actions, '补齐并继续', 'primary', () => void this.runAction(() => this.timerController.resolveRecovery('continue')));
-		this.noticeButton(actions, '首个午夜结束', '', () => void this.runAction(() => this.timerController.resolveRecovery('stop-at-midnight')));
-		this.noticeButton(actions, '暂不处理', '', () => new Notice('未修改任何日记'));
+		const actions = this.timerPanel.createDiv('tg-timer-actions');
+		this.createButton(actions, 'primary', '补齐并继续', () => void this.runAction(() => this.timerController.resolveRecovery('continue')));
+		this.createButton(actions, 'neutral', '首个午夜结束', () => void this.runAction(() => this.timerController.resolveRecovery('stop-at-midnight')));
+		this.createButton(actions, 'quiet', '暂不处理', () => new Notice('未修改任何日记'));
 	}
 
-	private createTimerHeader(title: string, trailing?: HTMLElement): HTMLElement {
-		const header = this.timerPanel.createDiv('tg-sundial-timer-head');
-		header.createDiv({ cls: 'tg-sundial-timer-eyebrow', text: title });
-		if (trailing) header.appendChild(trailing);
-		return header;
+	private createEyebrow(title: string): HTMLElement {
+		return this.timerPanel.createDiv({ cls: 'tg-timer-eyebrow', text: title });
 	}
 
-	private createStartForm(placeholder: string, label: string): void {
-		const form = this.timerPanel.createEl('form', { cls: 'tg-sundial-timer-form' });
-		const input = form.createEl('input', {
-			cls: 'tg-sundial-timer-input',
+	private createStartRow(placeholder: string, label: string, variant: ButtonVariant, withPlay: boolean): void {
+		const row = this.timerPanel.createEl('form', { cls: label === '开始' ? 'tg-timer-idle-row' : 'tg-timer-switch-row' });
+		const input = row.createEl('input', {
+			cls: 'tg-timer-input',
 			attr: { type: 'text', placeholder, 'aria-label': '活动名称', autocomplete: 'off' },
 		});
-		const button = form.createEl('button', { cls: `tg-sundial-action${label === '开始' ? ' primary' : ''}`, attr: { type: 'submit' } });
-		button.createSpan('tg-sundial-play-icon');
-		button.appendText(label);
-		form.addEventListener('submit', (event) => {
+		this.createButton(row, variant, label, null, withPlay ? PLAY_ICON : undefined, 'submit');
+		row.addEventListener('submit', (event) => {
 			event.preventDefault();
 			const name = input.value.trim();
 			if (!name) return void new Notice('请输入活动名称');
@@ -434,29 +436,33 @@ export class SundialTimeView {
 			['routine', '流程', 2],
 		];
 		const suggestions = this.timerController.getSuggestions();
-		const wrap = this.timerPanel.createDiv('tg-sundial-suggestions');
+		const wrap = this.timerPanel.createDiv('tg-chip-groups');
+		let rendered = 0;
 		for (const [source, label, limit] of groups) {
 			const items = suggestions.filter((item) => item.source === source).slice(0, limit);
 			if (items.length === 0) continue;
-			const group = wrap.createDiv('tg-sundial-suggestion-group');
-			group.createSpan({ cls: 'tg-sundial-suggestion-label', text: label });
-			const list = group.createDiv('tg-sundial-suggestion-list');
+			rendered++;
+			const group = wrap.createDiv('tg-chip-group');
+			group.createSpan({ cls: 'tg-chip-group-label', text: label });
 			for (const item of items) {
-				const button = list.createEl('button', {
-					cls: 'tg-sundial-suggestion',
+				const button = group.createEl('button', {
+					cls: 'tg-chip',
 					text: item.name,
 					attr: { type: 'button', title: `开始计时：${item.name}` },
 				});
 				button.addEventListener('click', () => void this.start(item.name));
 			}
 		}
+		if (rendered === 0) wrap.remove();
 	}
 
 	private async start(name: string): Promise<void> {
 		const result = await this.runAction(() => this.timerController.start(name));
-		if (result?.ok) this.switchMessage = result.switchedFrom
-			? `已在同一时刻结束“${result.switchedFrom}”，并开始“${name.trim()}”。`
-			: '';
+		if (result?.ok) {
+			this.switchMessage = result.switchedFrom
+				? `已在同一时刻结束“${result.switchedFrom}”，并开始“${name.trim()}”。`
+				: '';
+		}
 	}
 
 	private async runAction(action: () => Promise<TimerActionResult>): Promise<TimerActionResult | null> {
@@ -480,19 +486,38 @@ export class SundialTimeView {
 	}
 
 	private createNotice(title: string, copy: string): HTMLElement {
-		const card = this.timerPanel.createDiv('tg-sundial-notice');
-		card.createDiv({ cls: 'tg-sundial-notice-title', text: title });
-		card.createDiv({ cls: 'tg-sundial-notice-copy', text: copy });
+		const card = this.timerPanel.createDiv('tg-timer-notice');
+		card.createDiv({ cls: 'tg-timer-notice-title', text: title });
+		card.createDiv({ cls: 'tg-timer-notice-body', text: copy });
 		return card;
 	}
 
-	private noticeButton(parent: HTMLElement, label: string, style: string, action: () => void): void {
-		const button = parent.createEl('button', { cls: `tg-sundial-action quiet ${style}`, text: label, attr: { type: 'button' } });
-		button.addEventListener('click', action);
+	private createButton(
+		parent: HTMLElement,
+		variant: ButtonVariant,
+		label: string,
+		action: (() => void) | null,
+		icon?: string,
+		type: 'button' | 'submit' = 'button'
+	): HTMLButtonElement {
+		const button = parent.createEl('button', {
+			cls: `tg-btn tg-btn-${variant}`,
+			attr: { type },
+		});
+		if (icon) {
+			const iconWrap = button.createSpan('tg-btn-icon');
+			iconWrap.setAttr('aria-hidden', 'true');
+			iconWrap.innerHTML = icon;
+		}
+		button.appendText(label);
+		if (action) button.addEventListener('click', action);
+		return button;
 	}
 
 	private liveDot(): HTMLElement {
-		return document.createSpan('tg-sundial-live-dot');
+		const dot = document.createElement('span');
+		dot.className = 'tg-timer-live-dot';
+		return dot;
 	}
 
 	private updateTimerElapsed(now: Date): void {
