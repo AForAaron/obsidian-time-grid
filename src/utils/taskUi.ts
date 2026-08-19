@@ -1,5 +1,6 @@
 import { TGTask } from '../types/task';
 import { RoutineGroupViewModel } from '../types/routine';
+import { canStartTimerFromTask } from './taskTimer';
 
 export type FloatingPreference = 'bottom' | 'right';
 export type FloatingPlacement = 'bottom' | 'top' | 'right' | 'left';
@@ -30,6 +31,7 @@ export interface FloatingPosition {
 }
 
 export type TaskMenuAction =
+	| 'start-timer'
 	| 'edit'
 	| 'postpone-day'
 	| 'postpone-week'
@@ -78,9 +80,11 @@ export function positionFloatingLayer(
 	};
 }
 
-export function getTaskMenuActions(task: TGTask, writable: boolean): TaskMenuAction[] {
-	if (!writable) return ['show-readonly-reason', 'open-source'];
-	const actions: TaskMenuAction[] = ['edit'];
+export function getTaskMenuActions(task: TGTask, writable: boolean, timerAvailable = false): TaskMenuAction[] {
+	const actions: TaskMenuAction[] = [];
+	if (timerAvailable && canStartTimerFromTask(task)) actions.push('start-timer');
+	if (!writable) return actions.concat('show-readonly-reason', 'open-source');
+	actions.push('edit');
 	if (task.due) actions.push('postpone-day', 'postpone-week');
 	else if (task.section === 'unsorted') actions.push('set-today', 'set-long-term');
 	actions.push('open-source', 'delete');

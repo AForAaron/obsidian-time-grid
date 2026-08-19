@@ -14,6 +14,7 @@ import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange,
 import { getEffectiveWritingDelta, normalizeTimeGridData } from '../src/utils/writingStats';
 import { countFilteredSections, createEmptyTaskFilters, filterTasks, groupFutureTasks, hasActiveTaskFilters } from '../src/utils/taskView';
 import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer } from '../src/utils/taskUi';
+import { canStartTimerFromTask, startTaskTimer, taskTimerDefaultName, timerStateKey } from '../src/utils/taskTimer';
 import {
 	activeRoutineGroups,
 	adoptLegacyRoutineInstances,
@@ -42,6 +43,7 @@ import {
 } from '../src/utils/timerFormat';
 
 let passed = 0;
+const asyncTests: Array<{ name: string; fn: () => Promise<void> }> = [];
 
 function test(name: string, fn: () => void): void {
 	try {
@@ -52,6 +54,10 @@ function test(name: string, fn: () => void): void {
 		console.error(`✗ ${name}`);
 		throw error;
 	}
+}
+
+function testAsync(name: string, fn: () => Promise<void>): void {
+	asyncTests.push({ name, fn });
 }
 
 test('parses Tasks emoji fields without requiring a preceding space', () => {
@@ -379,6 +385,7 @@ test('floating layers flip and remain inside viewport margins', () => {
 test('task menus expose only safe actions for readonly tasks', () => {
 	const readonly = parseTaskLine('- [ ] Loop 🔁 every day', 'Daily.md', 0, '2026-08-01', '#goal');
 	assert.deepEqual(getTaskMenuActions(readonly, false), ['show-readonly-reason', 'open-source']);
+	assert.deepEqual(getTaskMenuActions(readonly, false, true), ['start-timer', 'show-readonly-reason', 'open-source']);
 });
 
 test('task menus vary scheduling actions by task shape', () => {
@@ -386,6 +393,106 @@ test('task menus vary scheduling actions by task shape', () => {
 	const inbox = parseTaskLine('- [ ] Inbox', 'Inbox.md', 0, '2026-08-01', '#goal');
 	assert.deepEqual(getTaskMenuActions(dated, true), ['edit', 'postpone-day', 'postpone-week', 'open-source', 'delete']);
 	assert.deepEqual(getTaskMenuActions(inbox, true), ['edit', 'set-today', 'set-long-term', 'open-source', 'delete']);
+	assert.deepEqual(getTaskMenuActions(inbox, true, true), ['start-timer', 'edit', 'set-today', 'set-long-term', 'open-source', 'delete']);
+});
+
+test('task timer eligibility excludes terminal and unknown states', () => {
+	const todo = parseTaskLine('- [ ] Todo', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const progress = parseTaskLine('- [/] Progress', 'Inbox.md', 1, '2026-08-01', '#goal');
+	const done = parseTaskLine('- [x] Done', 'Inbox.md', 2, '2026-08-01', '#goal');
+	const cancelled = parseTaskLine('- [-] Cancelled', 'Inbox.md', 3, '2026-08-01', '#goal');
+	const unknown = parseTaskLine('- [?] Unknown', 'Inbox.md', 4, '2026-08-01', '#goal');
+	assert.equal(canStartTimerFromTask(todo), true);
+	assert.equal(canStartTimerFromTask(progress), true);
+	assert.equal(canStartTimerFromTask(done), false);
+	assert.equal(canStartTimerFromTask(cancelled), false);
+	assert.equal(canStartTimerFromTask(unknown), false);
+	assert.equal(getTaskMenuActions(done, true, true).includes('start-timer'), false);
+});
+
+test('task timer default title removes Markdown decoration', () => {
+	const task = parseTaskLine('- [ ] [阅读计划](Projects/Reading.md) ==***30 分钟***== `专注`', 'Inbox.md', 0, '2026-08-01', '#goal');
+	assert.equal(taskTimerDefaultName(task), '阅读计划 30 分钟 专注');
+});
+
+test('timer confirmation keys change only with actionable timer state', () => {
+	assert.equal(timerStateKey({ status: 'idle', preparation: 'ready', dateKey: '2026-08-18', runningEntries: [] }), 'idle');
+	assert.notEqual(
+		timerStateKey({ status: 'running', preparation: 'ready', dateKey: '2026-08-18', runningEntries: [{ name: 'A', startTime: '2026-08-18T01:00:00.000Z', path: [] }] }),
+		timerStateKey({ status: 'running', preparation: 'ready', dateKey: '2026-08-18', runningEntries: [{ name: 'B', startTime: '2026-08-18T01:00:00.000Z', path: [] }] })
+	);
+});
+
+testAsync('task timer changes status only after timer start succeeds', async () => {
+	const task = parseTaskLine('- [ ] Todo', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const calls: string[] = [];
+	const outcome = await startTaskTimer(task, '自定义标题', {
+		startTimer: async () => {
+			calls.push('timer');
+			return { ok: true };
+		},
+		canUpdateStatus: true,
+		setInProgress: async () => {
+			calls.push('status');
+			return { ok: true };
+		},
+	});
+	assert.deepEqual(calls, ['timer', 'status']);
+	assert.equal(outcome.ok, true);
+	if (outcome.ok) assert.equal(outcome.statusUpdate, 'updated');
+});
+
+testAsync('task timer does not mutate status when timer start fails or task is readonly', async () => {
+	const task = parseTaskLine('- [ ] Todo', 'Inbox.md', 0, '2026-08-01', '#goal');
+	let statusWrites = 0;
+	const failed = await startTaskTimer(task, 'Todo', {
+		startTimer: async () => ({ ok: false, reason: 'io-error', message: 'failed' }),
+		canUpdateStatus: true,
+		setInProgress: async () => {
+			statusWrites++;
+			return { ok: true };
+		},
+	});
+	assert.equal(failed.ok, false);
+	const readonly = await startTaskTimer(task, 'Todo', {
+		startTimer: async () => ({ ok: true }),
+		canUpdateStatus: false,
+		setInProgress: async () => {
+			statusWrites++;
+			return { ok: true };
+		},
+	});
+	assert.equal(statusWrites, 0);
+	assert.equal(readonly.ok, true);
+	if (readonly.ok) assert.equal(readonly.statusUpdate, 'unchanged');
+});
+
+testAsync('task timer reports partial success when status update fails', async () => {
+	const task = parseTaskLine('- [ ] Todo', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const outcome = await startTaskTimer(task, 'Todo', {
+		startTimer: async () => ({ ok: true }),
+		canUpdateStatus: true,
+		setInProgress: async () => ({ ok: false, reason: 'line-mismatch-not-found', message: 'stale task' }),
+	});
+	assert.equal(outcome.ok, true);
+	if (outcome.ok) {
+		assert.equal(outcome.statusUpdate, 'update-failed');
+		assert.equal(outcome.statusResult?.ok, false);
+	}
+});
+
+testAsync('task timer converts a thrown status write into partial success', async () => {
+	const task = parseTaskLine('- [ ] Todo', 'Inbox.md', 0, '2026-08-01', '#goal');
+	const outcome = await startTaskTimer(task, 'Todo', {
+		startTimer: async () => ({ ok: true }),
+		canUpdateStatus: true,
+		setInProgress: async () => { throw new Error('status exploded'); },
+	});
+	assert.equal(outcome.ok, true);
+	if (outcome.ok) {
+		assert.equal(outcome.statusUpdate, 'update-failed');
+		assert.deepEqual(outcome.statusResult, { ok: false, reason: 'io-error', message: 'Error: status exploded' });
+	}
 });
 
 test('routine progress hides empty models and counts completed items', () => {
@@ -698,4 +805,34 @@ test('sundial production CSS preserves the approved Claude Design breakpoints an
 	assert.match(css, /--tg-heatmap-cell-size: 10px/);
 });
 
-console.log(`\n${passed} task core tests passed.`);
+test('task timer UI has modal confirmation, live strip, cleanup and narrow layout contracts', () => {
+	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	const modal = readFileSync(resolve('src/components/TaskTimerModal.ts'), 'utf8');
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	assert.match(panel, /unsubscribeTimer/);
+	assert.match(panel, /stopTimerTicker\(\)/);
+	assert.match(panel, /tg-task-timer-strip-elapsed/);
+	assert.match(panel, /this\.options\.timer\.stop\(\)/);
+	assert.match(modal, /计时状态刚刚发生变化，请重新确认/);
+	assert.match(modal, /已经正在计时，无需重复开始/);
+	assert.match(css, /\.tg-task-timer-strip/);
+	assert.match(css, /\.modal\.tg-task-timer-modal/);
+	assert.match(css, /@container tg-task-view \(max-width: 260px\)/);
+});
+
+void (async () => {
+	for (const item of asyncTests) {
+		try {
+			await item.fn();
+			passed++;
+			console.log(`✓ ${item.name}`);
+		} catch (error) {
+			console.error(`✗ ${item.name}`);
+			throw error;
+		}
+	}
+	console.log(`\n${passed} task core tests passed.`);
+})().catch((error) => {
+	console.error(error);
+	process.exitCode = 1;
+});

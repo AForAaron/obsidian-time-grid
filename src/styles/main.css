@@ -937,6 +937,116 @@
 	margin-bottom: 15px;
 }
 
+.tg-task-timer-strip {
+	display: grid;
+	grid-template-columns: 10px minmax(0, 1fr) auto auto;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	margin: -5px 0 15px;
+	padding: 9px 10px;
+	border: 1px solid color-mix(in srgb, var(--interactive-accent) 34%, var(--tg-task-soft-border));
+	border-radius: var(--tg-radius-md);
+	background: color-mix(in srgb, var(--interactive-accent) 7%, var(--tg-task-card));
+}
+
+.tg-task-timer-strip:not(.is-running) {
+	grid-template-columns: 16px minmax(0, 1fr) auto;
+	border-color: color-mix(in srgb, var(--text-error) 35%, var(--tg-task-soft-border));
+	background: color-mix(in srgb, var(--text-error) 6%, var(--tg-task-card));
+}
+
+.tg-task-timer-strip-indicator,
+.tg-task-timer-strip-warning-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.tg-task-timer-strip-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--interactive-accent);
+	box-shadow: 0 0 0 4px color-mix(in srgb, var(--interactive-accent) 13%, transparent);
+	animation: tg-pulse var(--tg-duration-pulse) ease infinite;
+}
+
+.tg-task-timer-strip-warning-icon,
+.tg-task-timer-strip-warning-icon svg {
+	width: 15px;
+	height: 15px;
+	color: var(--text-error);
+}
+
+.tg-task-timer-strip-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	gap: 1px;
+}
+
+.tg-task-timer-strip-label {
+	font-size: 9.5px;
+	font-weight: 650;
+	letter-spacing: .03em;
+	color: var(--text-muted);
+}
+
+.tg-task-timer-strip-name {
+	min-width: 0;
+	overflow: hidden;
+	font-size: 11.5px;
+	font-weight: 620;
+	line-height: 1.35;
+	color: var(--tg-text);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tg-task-timer-strip-elapsed {
+	font-family: var(--font-monospace);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	color: var(--tg-text);
+}
+
+.tg-task-timer-strip-stop,
+.tg-task-timer-strip-open {
+	appearance: none;
+	min-height: 30px;
+	margin: 0;
+	padding: 4px 9px;
+	border: 1px solid var(--tg-task-soft-border);
+	border-radius: 7px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 10.5px;
+	cursor: pointer;
+}
+
+.tg-task-timer-strip-stop:hover,
+.tg-task-timer-strip-stop:focus-visible,
+.tg-task-timer-strip-open:hover,
+.tg-task-timer-strip-open:focus-visible {
+	border-color: color-mix(in srgb, var(--interactive-accent) 48%, var(--tg-task-soft-border));
+	background: var(--background-modifier-hover);
+	color: var(--tg-text);
+}
+
+.tg-task-timer-strip-stop:focus-visible,
+.tg-task-timer-strip-open:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--interactive-accent) 72%, transparent);
+	outline-offset: 1px;
+}
+
+.tg-task-timer-strip-stop:disabled {
+	opacity: .58;
+	cursor: wait;
+}
+
 .tg-task-center-heading {
 	display: flex;
 	align-items: flex-start;
@@ -2508,6 +2618,102 @@
 	box-shadow: 0 14px 42px color-mix(in srgb, var(--background-modifier-box-shadow) 40%, transparent);
 }
 
+.modal.tg-task-timer-modal {
+	width: min(480px, calc(100vw - 28px));
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
+	background: var(--background-primary);
+	box-shadow: 0 14px 42px color-mix(in srgb, var(--background-modifier-box-shadow) 40%, transparent);
+}
+
+.tg-task-timer-form {
+	display: flex;
+	flex-direction: column;
+	gap: 13px;
+}
+
+.tg-task-timer-name {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 40px;
+	padding: 7px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+	box-shadow: none;
+	color: var(--text-normal);
+	font: inherit;
+}
+
+.tg-task-timer-name:focus {
+	border-color: color-mix(in srgb, var(--interactive-accent) 68%, var(--background-modifier-border));
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+}
+
+.tg-task-timer-current,
+.tg-task-timer-blocked {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 11px;
+	border: 1px solid color-mix(in srgb, var(--interactive-accent) 30%, var(--background-modifier-border));
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--interactive-accent) 7%, var(--background-secondary));
+}
+
+.tg-task-timer-current-icon,
+.tg-task-timer-current-icon svg,
+.tg-task-timer-blocked-icon,
+.tg-task-timer-blocked-icon svg {
+	width: 17px;
+	height: 17px;
+	flex: 0 0 17px;
+}
+
+.tg-task-timer-current-copy,
+.tg-task-timer-blocked-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	gap: 3px;
+}
+
+.tg-task-timer-current-label,
+.tg-task-timer-blocked-title {
+	font-size: 10.5px;
+	font-weight: 650;
+	color: var(--text-muted);
+}
+
+.tg-task-timer-current-name,
+.tg-task-timer-blocked-message {
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--text-normal);
+	word-break: break-word;
+}
+
+.tg-task-timer-switch-warning,
+.tg-task-timer-note {
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--text-muted);
+}
+
+.tg-task-timer-switch-warning {
+	margin-top: -5px;
+}
+
+.tg-task-timer-blocked {
+	border-color: color-mix(in srgb, var(--text-error) 38%, var(--background-modifier-border));
+	background: color-mix(in srgb, var(--text-error) 7%, var(--background-secondary));
+}
+
+.tg-task-timer-blocked-icon,
+.tg-task-timer-blocked-title {
+	color: var(--text-error);
+}
+
 .tg-task-modal-form,
 .tg-task-modal-field {
 	display: flex;
@@ -2711,13 +2917,43 @@
 }
 
 @media (max-width: 500px) {
-	.modal.tg-task-edit-modal {
+	.modal.tg-task-edit-modal,
+	.modal.tg-task-timer-modal {
 		width: calc(100vw - 16px);
 		padding: 18px 14px;
 	}
 
 	.tg-task-modal-footer {
 		flex-wrap: wrap;
+	}
+}
+
+@container tg-task-view (max-width: 260px) {
+	.tg-task-timer-strip {
+		grid-template-columns: 10px minmax(0, 1fr) auto;
+	}
+
+	.tg-task-timer-strip-elapsed {
+		grid-column: 2;
+	}
+
+	.tg-task-timer-strip-stop {
+		grid-column: 3;
+	}
+
+	.tg-task-timer-strip:not(.is-running) {
+		grid-template-columns: 16px minmax(0, 1fr);
+	}
+
+	.tg-task-timer-strip-open {
+		grid-column: 2;
+		justify-self: start;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tg-task-timer-strip-dot {
+		animation: none;
 	}
 }
 

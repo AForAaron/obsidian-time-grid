@@ -11,8 +11,10 @@ import {
 	WriteResult,
 } from '../types/task';
 import { RoutineActions, RoutineGroupViewModel, RoutineInstance, RoutineSnapshot } from '../types/routine';
+import { TimerActionResult, TimerSnapshot } from '../types/timer';
 import { TaskEditModal } from './TaskEditModal';
 import { TaskDeleteConfirmModal } from './TaskDeleteConfirmModal';
+import { TaskTimerModal } from './TaskTimerModal';
 import { TaskIndex } from '../utils/taskIndex';
 import { getTodayKey, sortTasks, terminalDate } from '../utils/taskParser';
 import { getTaskWriteBlockReason } from '../utils/taskWriter';
@@ -29,6 +31,8 @@ import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer, TaskMenu
 import { RoutineIndex } from '../utils/routineIndex';
 import { displayRoutineTitle } from '../utils/routineMarker';
 import { isRoutineReminderDue } from '../utils/routineReminder';
+import { formatTimerElapsed } from '../utils/timerFormat';
+import { canStartTimerFromTask, startTaskTimer, taskTimerDefaultName } from '../utils/taskTimer';
 
 type PersistedSection = 'unsorted' | 'goal' | 'future' | 'done';
 
@@ -44,6 +48,13 @@ interface TaskPanelOptions {
 		updateTask: (task: TGTask, patch: TaskPatch) => Promise<WriteResult>;
 		postponeTask: (task: TGTask, days: number) => Promise<WriteResult>;
 		deleteTask: (task: TGTask) => Promise<WriteResult>;
+	};
+	timer?: {
+		getSnapshot: () => TimerSnapshot;
+		onChange: (callback: () => void) => () => void;
+		start: (name: string) => Promise<TimerActionResult>;
+		stop: () => Promise<TimerActionResult>;
+		openTimeView: () => void;
 	};
 }
 
@@ -80,6 +91,7 @@ export class TaskPanel {
 	private options: TaskPanelOptions;
 	private unsubscribe: (() => void) | null = null;
 	private unsubscribeRoutine: (() => void) | null = null;
+	private unsubscribeTimer: (() => void) | null = null;
 	private expandedSections = new Set<TaskSection>();
 	private expandedTasks = new Set<string>();
 	private pendingStatuses = new Map<string, EditableTaskStatus>();
@@ -94,6 +106,10 @@ export class TaskPanel {
 	private layerEl: HTMLElement | null = null;
 	private layerAnchor: HTMLElement | null = null;
 	private layerKind: 'filter' | 'menu' | null = null;
+	private timerStripEl: HTMLElement | null = null;
+	private timerElapsedEl: HTMLElement | null = null;
+	private timerTickInterval: number | null = null;
+	private timerActionBusy = false;
 	private readonly handleScroll = () => {
 		this.closePreview();
 		this.dismissLayer(false);
@@ -124,6 +140,7 @@ export class TaskPanel {
 		this.options = options;
 		this.unsubscribe = this.index.onChange(() => this.render());
 		this.unsubscribeRoutine = this.options.routineIndex?.onChange(() => this.render()) ?? null;
+		this.unsubscribeTimer = this.options.timer?.onChange(() => this.renderTimerStrip()) ?? null;
 		this.container.closest('.tg-container')?.addEventListener('scroll', this.handleScroll, { passive: true });
 		window.addEventListener('resize', this.handleResize, { passive: true });
 		window.addEventListener('keydown', this.handleKeydown);
@@ -137,6 +154,9 @@ export class TaskPanel {
 		this.unsubscribe = null;
 		this.unsubscribeRoutine?.();
 		this.unsubscribeRoutine = null;
+		this.unsubscribeTimer?.();
+		this.unsubscribeTimer = null;
+		this.stopTimerTicker();
 		this.container.closest('.tg-container')?.removeEventListener('scroll', this.handleScroll);
 		window.removeEventListener('resize', this.handleResize);
 		window.removeEventListener('keydown', this.handleKeydown);
@@ -159,13 +179,19 @@ export class TaskPanel {
 		const settings = this.options.getSettings();
 		this.container.toggleClass('is-hidden', !settings.enabled);
 		this.container.empty();
-		if (!settings.enabled) return;
+		this.timerStripEl = null;
+		this.timerElapsedEl = null;
+		if (!settings.enabled) {
+			this.stopTimerTicker();
+			return;
+		}
 
 		const snapshot = this.index.getSnapshot();
 		const routineSnapshot = this.options.routineIndex?.getSnapshot();
 		const routineInstances = routineSnapshot?.groups.flatMap((group) => group.items) ?? [];
 		const allTasks = snapshot.tasks.concat(routineInstances.map((instance) => instance.task));
 		this.renderHeader(allTasks, snapshot.isIndexing || Boolean(routineSnapshot?.isIndexing));
+		this.renderTimerStrip();
 		if ((snapshot.isIndexing || routineSnapshot?.isIndexing) && allTasks.length === 0) {
 			this.renderLoading();
 			this.restoreScroll(outerScroll, previousScrollTop);
@@ -247,6 +273,80 @@ export class TaskPanel {
 			text.createSpan({ cls: 'tg-task-stat-label', text: stat.label });
 		}
 		this.renderSearchAndFilters(header, tasks);
+	}
+
+	private renderTimerStrip(): void {
+		this.stopTimerTicker();
+		this.timerStripEl?.remove();
+		this.timerStripEl = null;
+		this.timerElapsedEl = null;
+		const timer = this.options.timer;
+		const header = this.container.querySelector<HTMLElement>('.tg-task-center-header');
+		if (!timer || !header) return;
+		const snapshot = timer.getSnapshot();
+		if (snapshot.status === 'idle') return;
+
+		const strip = this.container.createDiv(`tg-task-timer-strip is-${snapshot.status}`);
+		header.after(strip);
+		this.timerStripEl = strip;
+		if (snapshot.status === 'running' && snapshot.runningEntries[0]) {
+			const entry = snapshot.runningEntries[0];
+			const indicator = strip.createSpan('tg-task-timer-strip-indicator');
+			indicator.createSpan('tg-task-timer-strip-dot');
+			const copy = strip.createDiv('tg-task-timer-strip-copy');
+			copy.createSpan({ cls: 'tg-task-timer-strip-label', text: '正在计时' });
+			copy.createSpan({ cls: 'tg-task-timer-strip-name', text: entry.name, attr: { title: entry.name } });
+			this.timerElapsedEl = strip.createSpan({
+				cls: 'tg-task-timer-strip-elapsed',
+				text: formatTimerElapsed(Date.now() - Date.parse(entry.startTime)),
+			});
+			const stop = strip.createEl('button', {
+				cls: 'tg-task-timer-strip-stop',
+				text: this.timerActionBusy ? '停止中…' : '停止',
+				attr: { type: 'button', 'aria-label': `停止计时：${entry.name}` },
+			});
+			stop.disabled = this.timerActionBusy;
+			stop.addEventListener('click', () => void this.stopTimerFromTaskView());
+			this.startTimerTicker(entry.startTime);
+			return;
+		}
+
+		const icon = strip.createSpan('tg-task-timer-strip-warning-icon');
+		setIcon(icon, 'triangle-alert');
+		const copy = strip.createDiv('tg-task-timer-strip-copy');
+		copy.createSpan({ cls: 'tg-task-timer-strip-label', text: '计时需要处理' });
+		copy.createSpan({ cls: 'tg-task-timer-strip-name', text: timerStatusCopy(snapshot), attr: { title: snapshot.message ?? '' } });
+		const open = strip.createEl('button', { cls: 'tg-task-timer-strip-open', text: '到时间页处理', attr: { type: 'button' } });
+		open.addEventListener('click', () => timer.openTimeView());
+	}
+
+	private startTimerTicker(startTime: string): void {
+		const update = () => {
+			if (this.timerElapsedEl) this.timerElapsedEl.textContent = formatTimerElapsed(Date.now() - Date.parse(startTime));
+		};
+		update();
+		this.timerTickInterval = window.setInterval(update, 1000);
+	}
+
+	private stopTimerTicker(): void {
+		if (this.timerTickInterval !== null) window.clearInterval(this.timerTickInterval);
+		this.timerTickInterval = null;
+	}
+
+	private async stopTimerFromTaskView(): Promise<void> {
+		if (!this.options.timer || this.timerActionBusy) return;
+		this.timerActionBusy = true;
+		this.renderTimerStrip();
+		try {
+			const result = await this.options.timer.stop();
+			if (!result.ok) new Notice(result.message);
+			else new Notice('计时已停止；任务状态保持不变');
+		} catch (error) {
+			new Notice(`停止计时失败：${String(error)}`);
+		} finally {
+			this.timerActionBusy = false;
+			this.renderTimerStrip();
+		}
 	}
 
 	private renderSearchAndFilters(parent: HTMLElement, tasks: TGTask[]): void {
@@ -677,7 +777,7 @@ export class TaskPanel {
 			return;
 		}
 		const writable = Boolean(!blockReason && this.options.actions);
-		const actions = getTaskMenuActions(task, writable);
+		const actions = getTaskMenuActions(task, writable, Boolean(this.options.timer));
 		const menu = document.body.createDiv({ cls: 'tg-task-menu tg-task-layer', attr: { role: 'menu', 'aria-label': '任务操作' } });
 		let previousGroup = '';
 		for (const action of actions) {
@@ -690,7 +790,10 @@ export class TaskPanel {
 			});
 			const icon = item.createSpan('tg-task-menu-icon');
 			setIcon(icon, config.icon);
-			item.createSpan({ cls: 'tg-task-menu-label', text: config.label });
+			const label = action === 'start-timer' && this.options.timer?.getSnapshot().status === 'running'
+				? '切换计时到此任务'
+				: config.label;
+			item.createSpan({ cls: 'tg-task-menu-label', text: label });
 			item.addEventListener('click', () => {
 				this.removeLayer();
 				this.runMenuAction(action, task, blockReason);
@@ -704,6 +807,13 @@ export class TaskPanel {
 		const instance = this.findRoutineInstance(task);
 		const menu = document.body.createDiv({ cls: 'tg-task-menu tg-task-layer', attr: { role: 'menu', 'aria-label': '每日流程操作' } });
 		const actions: Array<{ label: string; icon: string; danger?: boolean; run: () => void }> = [];
+		if (this.options.timer && canStartTimerFromTask(task)) {
+			actions.push({
+				label: this.options.timer.getSnapshot().status === 'running' ? '切换计时到此任务' : '开始计时',
+				icon: 'play',
+				run: () => this.openTimerModal(task, Boolean(!blockReason && this.options.actions)),
+			});
+		}
 		if (!blockReason && this.options.actions) {
 			actions.push({ label: '编辑今天', icon: 'pencil', run: () => this.openEditor(task) });
 			if (instance?.itemId) actions.push({ label: '修改以后每天', icon: 'calendar-cog', run: () => this.options.routineActions?.editFuture(instance) });
@@ -730,6 +840,9 @@ export class TaskPanel {
 
 	private runMenuAction(action: TaskMenuAction, task: TGTask, blockReason: string | null): void {
 		switch (action) {
+			case 'start-timer':
+				this.openTimerModal(task, Boolean(!blockReason && this.options.actions));
+				break;
 			case 'edit':
 				this.openEditor(task);
 				break;
@@ -923,6 +1036,25 @@ export class TaskPanel {
 		}).open();
 	}
 
+	private openTimerModal(task: TGTask, taskWritable: boolean): void {
+		const timer = this.options.timer;
+		if (!timer || !canStartTimerFromTask(task)) return;
+		new TaskTimerModal(this.app, {
+			defaultName: taskTimerDefaultName(task),
+			taskWritable,
+			taskAlreadyInProgress: task.status === 'in-progress',
+			getSnapshot: timer.getSnapshot,
+			openTimeView: timer.openTimeView,
+			start: (name) => startTaskTimer(task, name, {
+				startTimer: timer.start,
+				canUpdateStatus: taskWritable,
+				setInProgress: taskWritable && this.options.actions
+					? () => this.runMutation(task, () => this.options.actions!.setStatus(task, 'in-progress'))
+					: undefined,
+			}),
+		}).open();
+	}
+
 	private openDeleteConfirmation(task: TGTask): void {
 		if (!this.options.actions) return;
 		new TaskDeleteConfirmModal(this.app, task, {
@@ -1055,8 +1187,16 @@ function isFinePointer(): boolean {
 	return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 }
 
+function timerStatusCopy(snapshot: TimerSnapshot): string {
+	if (snapshot.status === 'conflict') return snapshot.message ?? '发现多个正在运行的活动';
+	if (snapshot.status === 'invalid') return snapshot.message ?? '计时格式异常';
+	if (snapshot.status === 'recovery-required') return '需要先处理跨日计时';
+	return snapshot.message ?? '计时写入失败';
+}
+
 function taskMenuActionConfig(action: TaskMenuAction): { label: string; icon: string; group: string; danger?: boolean } {
 	switch (action) {
+		case 'start-timer': return { label: '开始计时', icon: 'play', group: 'timer' };
 		case 'edit': return { label: '编辑任务', icon: 'pencil', group: 'edit' };
 		case 'postpone-day': return { label: '顺延一天', icon: 'calendar-plus', group: 'schedule' };
 		case 'postpone-week': return { label: '顺延一周', icon: 'calendar-range', group: 'schedule' };

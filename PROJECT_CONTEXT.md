@@ -75,7 +75,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 
 ## 当前进度
 
-截至 2026-08-02，项目处于可构建、可安装到 Obsidian vault 使用的阶段。当前重点进度记录如下：
+截至 2026-08-19，项目处于可构建、可安装到 Obsidian vault 使用的阶段。当前重点进度记录如下：
 
 - 基础插件骨架已完成：插件清单、TypeScript 入口、esbuild 构建、安装脚本和右侧面板注册流程已具备。
 - 核心时间可视化已完成日晷重组：包含可切换的近 3 个月、近 6 个月、近 1 年长期轨迹、本月位置、外圈今日进度、内圈当前小时、内置计时控制和今日去向。
@@ -84,13 +84,14 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 计时统计边界已修正：`simple-time-tracker` 时长会按当前日期边界裁剪，避免跨日记录影响单日统计。
 - 写作增量统计已具备：插件启用后为全库 Markdown 建立字数基线，并按日期记录新增字数。
 - 最新构建/安装状态：日晷时间视图与内置计时器保持 Task 面板及任务写入规则不变；64 项核心自动测试、每日流程临时 Git vault 24 次写入、计时器临时 Git vault 9 次写入、生产打包均已通过；最终构建（`main.js` SHA-256 `235cc043…`）已同步到 Aaron_Ob 与 Documents Obsidian Vault。工作区改动尚未提交。
+- 当前开发状态：任务菜单已接入现有全局计时器，支持自定义标题、原子切换确认、待办自动转进行中、只读任务计时和任务页实时计时条；72 项核心自动测试、每日流程临时 Git vault 24 次写入、计时器临时 Git vault 9 次写入和生产打包已通过。最终构建已同步到 Aaron_Ob 与 Documents Obsidian Vault，两个安装目录的 `main.js`、`styles.css`、`manifest.json` 与工作区哈希一致。
 - 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433。
 - 任务模块 Phase 2 已完成：四态菜单、完成/重新打开快捷按钮、终态日期、严格唯一定位、失败重扫和写作统计抑制已接入；异常、未知状态、循环和重复任务保持只读或拒写。
 - 任务模块 Phase 3 已完成：支持编辑描述、到期日、优先级和长期标签；失败时弹窗保持打开并提供可复制错误；只读任务只显示诊断和源文件入口。
 - 任务模块 Phase 4 已完成：支持删除二次确认、顺延一天、Shift 顺延一周，以及待分类“设为今天/设为长期”；无到期日不显示顺延。
 - 任务中心 UI 重设计已完成：顶部双视图切换、最后视图持久化、四统计卡、即时搜索、状态/优先级/来源组合筛选、过滤计数、未来三组、已结束合并、桌面完整浮层、触屏行内展开，以及统一 portal 状态菜单、更多菜单和筛选浮层均已接入。
 - 响应式样式使用任务视图容器查询，覆盖 `≤320px`、`321–520px`、`>520px`；极窄侧栏固定 2×2 统计与收口筛选，不再常驻编辑、顺延、删除按钮，深色与浅色均使用 Obsidian 主题变量和 `color-mix`。
-- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 52 个核心用例及独立临时 Git vault 集成验证；包含配置格式、稳定 ID、日期计划、模板迁移、幂等生成、历史排除、今天编辑、取消语义、提醒判断、重复/错日期只读、CRLF/BOM、并发旧版本拒写、任务卡视觉契约和无行动描述任务过滤。
+- 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 72 个核心用例及独立临时 Git vault 集成验证；除原有任务、每日流程和计时数据边界外，已覆盖任务计时资格、Markdown 标题清理、切换竞态、计时失败不改状态、状态回写部分成功、只读任务和计时条资源清理。
 
 ## 修改等级
 
@@ -268,3 +269,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/components/SundialTimeView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`install.sh`、`PROJECT_CONTEXT.md`、`.gitignore`、`Time Grid Design System 3/`
 - 验证方式：`npm test` 64 项核心用例、Routine 临时 vault 24 次写入、Timer 临时 vault 9 次写入通过；`npm run build`、`git diff --check`、`bash -n install.sh` 通过。最终构建安装到 `/Users/aaron/Documents/Obsidian Vault` 并与工作区 SHA-256 一致；在约 239px 的 Obsidian 侧栏通过内存快照验证空闲、运行、切换反馈、冲突、写入失败和跨日恢复，所有面板无横向溢出。
 - 后续注意事项：QA 状态仅替换运行时内存快照，已恢复真实空闲控制器；测试 vault 未创建或修改任何日记，真实计时写入仍需用户明确授权。
+
+### 2026-08-19（任务卡直接计时）
+
+- 修改等级：L3 跨模块改动
+- 变更摘要：待办/进行中普通任务、Routine 和只读循环任务的更多菜单已加入计时入口；新弹窗允许编辑清理过 Markdown 的默认标题，运行态要求确认原子切换并在提交前重读快照。计时成功后，可写待办转为进行中，只读任务不改状态；状态回写失败会保留已启动的计时并显示部分成功。任务页新增全局实时计时条、停止按钮及异常到时间页入口，每秒只更新时长文本。
+- 涉及文件：`src/components/TaskTimerModal.ts`、`src/components/TaskPanel.ts`、`src/utils/taskTimer.ts`、`src/utils/taskUi.ts`、`src/utils/timerFormat.ts`、`src/components/SundialTimeView.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`PROJECT_CONTEXT.md`
+- 验证方式：`npm test` 通过 72 项核心用例、Routine 临时 vault 24 次写入和 Timer 临时 vault 9 次写入；`npm run build`、`git diff --check` 通过。在专用临时 Obsidian 1.12.7 vault 实际验证自定义标题启动、日记/计时块自动创建、待办转进行中、实时计时条、切换确认和停止后任务保持进行中；随后将同一构建安装到 Aaron_Ob 与 Documents Obsidian Vault，并确认三项插件文件哈希一致，未在真实 vault 启动计时或改写任务。
+- 后续注意事项：计时数据仍完全复用 `TimerController` / `simple-time-tracker`，不持久化任务 ID 关联；覆盖前备份位于 `/private/tmp/time-grid-task-timer-backup.URysrW`，Obsidian 需重载插件或重启后使用新构建。

@@ -116,6 +116,17 @@ export class TimeGridView extends ItemView {
 			getSettings: this.getTaskSettings,
 			getState: this.getTaskPanelState,
 			saveState: this.saveTaskPanelState,
+			timer: {
+				getSnapshot: () => this.timerController.getSnapshot(),
+				onChange: (callback) => this.timerController.onChange(callback),
+				start: (name) => this.timerController.start(name),
+				stop: () => this.timerController.stop(),
+				openTimeView: () => {
+					this.activeMode = 'time';
+					this.applyMode(true);
+					this.modeButtons.get('time')?.focus();
+				},
+			},
 			routineIndex: this.routineIndex,
 			routineActions: {
 				createTodayNote: async () => {

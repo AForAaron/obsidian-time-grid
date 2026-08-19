@@ -291,3 +291,9 @@ function findAll(content: string, needle: string): number[] {
 function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+export function formatTimerElapsed(ms: number): string {
+	const seconds = Math.max(0, Math.floor(ms / 1000));
+	const pad = (value: number) => String(value).padStart(2, '0');
+	return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds % 3600 / 60))}:${pad(seconds % 60)}`;
+}

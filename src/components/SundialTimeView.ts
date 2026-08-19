@@ -4,6 +4,7 @@ import { getDailyNoteFileForDate } from '../utils/dailyNotes';
 import { TimerController } from '../utils/timerController';
 import { TimeRange, TimerActionResult, TimerSnapshot, TimerSuggestionSource } from '../types/timer';
 import { HEATMAP_RANGES, WritingStatsTracker } from '../utils/writingStats';
+import { formatTimerElapsed } from '../utils/timerFormat';
 
 interface SundialTimeViewOptions {
 	getRange: () => TimeRange;
@@ -349,7 +350,7 @@ export class SundialTimeView {
 			cls: 'tg-timer-activity-meta',
 			text: `开始于 ${formatClock(new Date(entry.startTime)).slice(0, 5)} · 关闭 Obsidian 后仍继续`,
 		});
-		this.timerElapsed = main.createDiv({ cls: 'tg-timer-elapsed', text: formatElapsed(Date.now() - Date.parse(entry.startTime)) });
+		this.timerElapsed = main.createDiv({ cls: 'tg-timer-elapsed', text: formatTimerElapsed(Date.now() - Date.parse(entry.startTime)) });
 		const actions = this.timerPanel.createDiv('tg-timer-actions');
 		this.createButton(actions, 'danger-quiet', '停止', () => void this.runAction(() => this.timerController.stop()), STOP_ICON);
 		this.timerPanel.createDiv({ cls: 'tg-timer-switch-label', text: '切换活动 · 开始新活动会自动结束当前活动' });
@@ -365,7 +366,7 @@ export class SundialTimeView {
 		for (const entry of snapshot.runningEntries) {
 			const row = list.createDiv('tg-timer-conflict-row');
 			row.createSpan({ text: entry.name });
-			row.createSpan({ cls: 'tg-timer-recovery-role', text: formatElapsed(Date.now() - Date.parse(entry.startTime)) });
+			row.createSpan({ cls: 'tg-timer-recovery-role', text: formatTimerElapsed(Date.now() - Date.parse(entry.startTime)) });
 		}
 		const actions = this.timerPanel.createDiv('tg-timer-actions');
 		this.createButton(actions, 'danger-quiet', '结束全部并继续', () => void this.runAction(() => this.timerController.resolveConflict()));
@@ -522,7 +523,7 @@ export class SundialTimeView {
 
 	private updateTimerElapsed(now: Date): void {
 		const entry = this.timerController.getSnapshot().runningEntries[0];
-		if (this.timerElapsed && entry) this.timerElapsed.textContent = formatElapsed(now.getTime() - Date.parse(entry.startTime));
+		if (this.timerElapsed && entry) this.timerElapsed.textContent = formatTimerElapsed(now.getTime() - Date.parse(entry.startTime));
 	}
 
 	private async refreshActivity(now: Date, force: boolean): Promise<void> {
@@ -660,11 +661,6 @@ function colorIndex(name: string): number {
 
 function formatClock(date: Date): string {
 	return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
-function formatElapsed(ms: number): string {
-	const seconds = Math.max(0, Math.floor(ms / 1000));
-	return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds % 3600 / 60))}:${pad(seconds % 60)}`;
 }
 
 function formatDuration(ms: number, includeSeconds: boolean): string {
