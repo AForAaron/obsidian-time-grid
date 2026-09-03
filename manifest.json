@@ -1,7 +1,7 @@
 {
 	"id": "time-grid",
 	"name": "Time Grid",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"minAppVersion": "1.6.0",
 	"description": "极简主义的时间管理与可视化工具 - 向死而生",
 	"author": "Aaron",

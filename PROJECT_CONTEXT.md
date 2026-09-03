@@ -24,7 +24,9 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/components/RoutineItemEditModal.ts`：星期、日期区间、提醒、优先级及“同时应用到今天”编辑
   - `src/components/RoutineMigrationModal.ts`：旧日记模板的一次确认式迁移预览
   - `src/components/RoutinePromoteModal.ts`：把今天的临时项目提升为长期流程定义
-  - `src/components/TaskTimerModal.ts`：从任务卡启动计时的标题编辑与原子切换确认
+  - `src/components/TaskTimerModal.ts`：从任务卡启动计时的标题编辑、原子切换确认与「同时完成上一个任务」勾选
+  - `src/components/TimerStopModal.ts`：停止计时时的「停止并完成 / 仅停止 / 继续计时」三选一
+  - `src/components/TaskCreateModal.ts`：新建任务弹窗，默认到期日为今天且可清除
 - 数据工具：
   - `src/utils/dailyNotes.ts`：打开或创建日记
   - `src/utils/dailyNotesParser.ts`：读取日记日期与 `simple-time-tracker` 数据
@@ -38,7 +40,9 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/utils/taskWriter.ts`：基于 `Vault.process()` 的任务严格定位、状态序列化与原子写回
   - `src/utils/taskView.ts`：任务搜索、状态/优先级/来源组合筛选、分区计数与未来时间分组纯函数
   - `src/utils/taskUi.ts`：任务浮层碰撞定位、菜单操作可用性与每日流程展示进度纯函数
-  - `src/utils/taskTimer.ts`：任务计时资格判定、默认标题清理与状态联动纯函数
+  - `src/utils/taskTimer.ts`：任务计时资格判定、默认标题清理、关联任务解析与开始/停止的状态联动纯函数
+  - `src/utils/taskInbox.ts`：收件箱插槽定位、新任务序列化、撞车检测与 ID 生成纯函数
+  - `src/utils/vaultPaths.ts`：逐级创建父目录的共享工具
   - `src/utils/routineFormat.ts`：流程配置笔记与今天实例的解析、序列化、计划求值及旧格式块识别纯函数
   - `src/utils/routineMarker.ts`：流程实例的隐藏身份标记读写
   - `src/utils/routineRepository.ts`：配置笔记、模板迁移、实例生成及旧格式稳定 ID 领养
@@ -58,7 +62,11 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 任一时刻只允许一个运行活动；多个运行项、多个计时块、异常 JSON 或异常插入标记一律进入诊断状态并拒绝自动写入。计时切换使用同一时间戳结束旧段并开始新段。
 - 无今日日记时仅在日记核心插件可用时按其配置与模板创建；无计时块时优先使用 `time-grid-timer-slot` 成对标记，否则在文末追加“时间记录”。所有修改经 `Vault.process()` 重新读取并只替换目标 JSON。
 - 运行计时在本地午夜拆分；关闭期间跨日不超过 24 小时自动补齐，超过 24 小时必须先选择补齐并继续、首个午夜结束或暂不处理。恢复决策前禁止开始新计时。
-- 快捷建议合并最近 7 天活动、今日/逾期任务和今日流程并去重；建议只贡献活动名称，计时操作不改变任务或每日流程状态。
+- 快捷建议合并最近 7 天活动、今日/逾期任务和今日流程并去重；建议只贡献活动名称。
+- 任务与计时的关联只存在于 `TimerController` 的内存中，不写入日记也不写入 `data.json`；只在从任务卡启动计时时建立，手输、建议启动和重启后恢复的计时一律视为无关联，绝不按活动名反查任务。关联在计时身份（活动名 + 开始时间）发生任何变化时立即失效。
+- 两个停止入口统一走 `TimeGridView.requestStopTimer()`。存在可完成的关联任务时先弹窗（因此「继续计时」才有意义），选定后先停计时、成功后才改任务状态；无关联时保持一点即停。任务在停止前解析，因为计时一停关联就失效。
+- 原子切换弹窗提供默认不勾的「同时把上一个任务标为完成」。计时写入永远先落盘，之后任何状态写入失败都只降级为部分成功，绝不回滚计时。
+- 插件内新建的任务统一写入收件箱（默认 `Time Grid Tasks.md`，可在设置中修改），不写进日记。位置由唯一的 `time-grid-task-slot` 插槽决定：缺失时自动补一对，出现多个或顺序颠倒则拒绝写入。新任务使用 Tasks 兼容格式并带 `➕` 创建日期，`📅` 默认当天且可清除；只有当整行与收件箱内已有行完全相同时才补 `🆔`，以保证之后仍能按「原文全局唯一」安全改写。
 - 计时器写回造成的 Markdown 字符差异会从“新增字数”中扣除；真实 vault 计时写入必须由用户明确授权后再测试。
 - 活动热力图依赖日记和 `simple-time-tracker` 代码块计算计时时长。
 - 今日计时分布会区分无日记、无计时块、格式错误、空记录和有效记录；没有计时时仍显示默认空圆环。
@@ -98,6 +106,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 响应式样式使用任务视图容器查询，覆盖 `≤320px`、`321–520px`、`>520px`；极窄侧栏固定 2×2 统计与收口筛选，不再常驻编辑、顺延、删除按钮，深色与浅色均使用 Obsidian 主题变量和 `color-mix`。
 - 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 72 个核心用例及独立临时 Git vault 集成验证；除原有任务、每日流程和计时数据边界外，已覆盖任务计时资格、Markdown 标题清理、切换竞态、计时失败不改状态、状态回写部分成功、只读任务和计时条资源清理。
 - 2026-09-03 发布首个 GitHub Release `v0.2.0`（<https://github.com/AForAaron/time-grid-obsidian/releases/tag/v0.2.0>），附件为 `main.js`、`manifest.json`、`styles.css`；`versions.json` 已补齐。CI 产出的三个文件与本地构建、两个 vault 安装目录 SHA-256 完全一致，构建可复现。
+- 2026-09-03 起版本为 `0.3.0`：新增停止计时询问是否完成、切换时可顺带完成上一个任务、以及插件内新建任务到专用收件箱。
 - 真实 vault 的计时写入已于 2026-09-03 首次验证：在 Aaron_Ob 实际完成开始、原子切换和停止，切换处时间戳同毫秒，与备份的完整 diff 只有一行，测试后已逐字节还原。跨日恢复仍无法在真实 vault 自然触发，只有临时 Git vault 的集成写入作保障。
 
 ## 修改等级
@@ -294,3 +303,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 验证方式：`npm test` 通过 72 项核心用例、每日流程临时 Git vault 24 次写入、计时器临时 Git vault 9 次写入；`npm run build`、`git diff --check` 通过；临时目录 `npm ci` 验证升版后的锁文件与 CI 一致（CI 用 `npm ci`）；`versions.json` 通过 JSON 解析；删分支前逐个用 `git merge-base --is-ancestor` 确认是 `main` 的祖先。最终构建已安装到 Aaron_Ob 与 Documents Obsidian Vault，三处 `main.js`（`71a21a9f…`）、`styles.css`（`0649c06d…`）、`manifest.json` SHA-256 一致；`main.js` 与上一版一致属预期，本轮未改任何 `src/` 代码。另外用真实的 `02-Daily Notes/2026-09-03.md` 内容干跑了 `inspectTimerContent` / `startTimerInContent`，结果为 `ready`、可写入——确认日记中 dataviewjs 代码块内的 `simple-time-tracker` 字面量不会被 `TRACKER_FENCE` 的行首锚定误判为第二个计时块。
 - 真实 vault 冒烟测试（首次执行）：在 Aaron_Ob 的 Obsidian 1.12.7 中实际驱动 Time Grid 完成开始 → 原子切换 → 停止。空闲态、运行态（脉冲点、累计时长、独立停止行、切换活动区）、任务与流程建议芯片、停止后的今日去向双段圆环均渲染正常。日记写入结果：计时块始终为 1 个；`TimeGrid冒烟测试A` 记录 59.3 秒、`TimeGrid冒烟测试B` 记录 18.3 秒，两段均正常闭合；切换处 A 的 `endTime` 与 B 的 `startTime` 为同一毫秒 `2026-09-03T04:45:47.797Z`，无空隙无重叠。**与测试前备份的完整 diff 只有一行**——164 行日记的其余部分逐字节不变，无空行增减、无编码变化、无行尾变化。停止后 `timerRecovery.active` 正确回到 `null`，`writingStats` 未为当日记录任何新增字数，确认计时写入已被正确扣除。测试结束后日记已从备份逐字节还原（SHA-256 回到 `59501733…`），面板视图也已切回用户原本的任务视图，`data.json` 与基线一致。
 - 后续注意事项：跨日恢复无法在真实 vault 自然触发（需真的跨过午夜），伪造需手改 `data.json` 的 `timerRecovery` 指针，属污染真实数据，故未做；该路径的保障仍来自临时 Git vault 的 9 次集成写入（含跨午夜拆分幂等与拒绝陈旧写回）。另确认日记中 dataviewjs 代码块内的 `simple-time-tracker` 字面量不会被 `TRACKER_FENCE` 的行首锚定误判为第二个计时块——这一点先用真实文件内容干跑 `inspectTimerContent` 验证（结果 `ready`），再由实际写入印证。备份位于会话 scratchpad 的 `vault-backup/`，已删分支的 SHA 记录在同目录 `deleted-branches.txt`。
+
+### 2026-09-03（停止计时问完成 · 插件内新建任务）
+
+- 修改等级：L3 跨模块改动
+- 变更摘要：三项功能。其一，记住「这次计时是从哪条任务点开的」——关联只存在于 `TimerController` 的内存，只在从任务卡启动时建立，计时身份一变即失效，重新定位任务复用写入层同一套「原文在文件内全局唯一」的规则，命中 0 条或多条一律放弃而不猜。两个停止入口统一到 `TimeGridView.requestStopTimer()`：有可完成的关联任务时先弹「停止并完成 / 仅停止 / 继续计时」，无关联则保持一点即停。其二，原子切换弹窗新增默认不勾的「同时把上一个任务标为完成」。其三，新增 `TaskWriter.createTask()`——任务模块第一条「新增行」写入路径，落盘到专用收件箱的唯一 `time-grid-task-slot` 插槽，插槽异常一律拒写；新任务带 `➕` 创建日期与默认为今天的 `📅`，仅在与已有行撞车时才补 `🆔`。入口是任务中心顶部的「+」。顺带把 `ensureParentFolder` 提取为共享的 `vaultPaths` 工具，把 `timerStateKey` 与 `timerSuggestionName` 移入 `timerFormat` 以打断 `taskTimer` ↔ `timerController` 的循环引用。
+- 涉及文件：`src/utils/taskTimer.ts`、`src/utils/timerController.ts`、`src/utils/timerFormat.ts`、`src/utils/taskInbox.ts`、`src/utils/taskWriter.ts`、`src/utils/vaultPaths.ts`、`src/utils/routineRepository.ts`、`src/utils/writingStats.ts`、`src/types/timer.ts`、`src/types/task.ts`、`src/components/TimerStopModal.ts`、`src/components/TaskCreateModal.ts`、`src/components/TaskTimerModal.ts`、`src/components/TaskPanel.ts`、`src/components/SundialTimeView.ts`、`src/views/TimeGridView.ts`、`src/main.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`tests/taskInboxVault.integration.ts`、`tests/obsidianStub.ts`、`scripts/run-task-inbox-vault-tests.mjs`、`package.json`、`manifest.json`、`versions.json`、`README.md`
+- 验证方式：`npm test` 通过 89 项核心用例（新增 17 项，覆盖关联解析的 0/1/多条分支、可完成性判定、计时身份指纹、停止的四种结果、切换时旧任务写入失败仍不阻塞新计时、新任务序列化、插槽 0/1/多个、撞车补 ID、路径归一化）、每日流程临时 Git vault 24 次写入、计时器 9 次写入，以及新增的收件箱临时 Git vault 7 次写入（含新建任务后立即被既有严格写入路径改写、撞 ID 的两条仍可各自唯一定位、插槽外的手写内容原样保留、CRLF 保持、插槽复制时拒写且原文一字不动）。`npm run build`、`git diff --check` 通过。最终构建已安装到 Aaron_Ob 与 Documents Obsidian Vault，三处文件 SHA-256 一致。
+- 后续注意事项：**真实 vault 的 UI 冒烟测试尚未完成**。Aaron_Ob 窗口不是 Obsidian 的焦点窗口，`View > Force Reload` 始终作用在另一个 vault 窗口上，后台控制无法切换焦点窗口，请求全屏控制授权也未获应答，因此该窗口仍在运行 0.2.0 代码（已通过「切换视图触发保存后 `data.json` 中仍无 `inboxPath`」确认，不是功能缺陷）。整个过程中今日日记 SHA-256 未变、未创建收件箱文件、`timerRecovery` 保持为空、面板视图已还原。用户需手动点选 Aaron_Ob 窗口后重载插件，再验证「+」新建任务与停止计时弹窗。
