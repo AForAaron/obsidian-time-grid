@@ -23,6 +23,8 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/components/RoutineManagerModal.ts`：多个每日流程组合与项目的创建、排序、启停和计划管理
   - `src/components/RoutineItemEditModal.ts`：星期、日期区间、提醒、优先级及“同时应用到今天”编辑
   - `src/components/RoutineMigrationModal.ts`：旧日记模板的一次确认式迁移预览
+  - `src/components/RoutinePromoteModal.ts`：把今天的临时项目提升为长期流程定义
+  - `src/components/TaskTimerModal.ts`：从任务卡启动计时的标题编辑与原子切换确认
 - 数据工具：
   - `src/utils/dailyNotes.ts`：打开或创建日记
   - `src/utils/dailyNotesParser.ts`：读取日记日期与 `simple-time-tracker` 数据
@@ -36,6 +38,9 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
   - `src/utils/taskWriter.ts`：基于 `Vault.process()` 的任务严格定位、状态序列化与原子写回
   - `src/utils/taskView.ts`：任务搜索、状态/优先级/来源组合筛选、分区计数与未来时间分组纯函数
   - `src/utils/taskUi.ts`：任务浮层碰撞定位、菜单操作可用性与每日流程展示进度纯函数
+  - `src/utils/taskTimer.ts`：任务计时资格判定、默认标题清理与状态联动纯函数
+  - `src/utils/routineFormat.ts`：流程配置笔记与今天实例的解析、序列化、计划求值及旧格式块识别纯函数
+  - `src/utils/routineMarker.ts`：流程实例的隐藏身份标记读写
   - `src/utils/routineRepository.ts`：配置笔记、模板迁移、实例生成及旧格式稳定 ID 领养
   - `src/utils/routineIndex.ts`：今天组合、昨日漏做、日记存在状态与诊断快照
   - `src/utils/routineWriter.ts`：流程定义、组合、项目及今天实例的唯一写入入口
@@ -83,7 +88,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 今日计时分布已完成新版本：圆环图、中心总时长、空状态、格式异常状态、进行中状态、任务配色、Top 5 + 其他合并和图例悬停联动已实现。
 - 计时统计边界已修正：`simple-time-tracker` 时长会按当前日期边界裁剪，避免跨日记录影响单日统计。
 - 写作增量统计已具备：插件启用后为全库 Markdown 建立字数基线，并按日期记录新增字数。
-- 最新构建/安装状态：日晷时间视图与内置计时器保持 Task 面板及任务写入规则不变；64 项核心自动测试、每日流程临时 Git vault 24 次写入、计时器临时 Git vault 9 次写入、生产打包均已通过；最终构建（`main.js` SHA-256 `235cc043…`）已同步到 Aaron_Ob 与 Documents Obsidian Vault。工作区改动尚未提交。
+- 最新构建/安装状态：日晷时间视图与内置计时器保持 Task 面板及任务写入规则不变；64 项核心自动测试、每日流程临时 Git vault 24 次写入、计时器临时 Git vault 9 次写入、生产打包均已通过；最终构建（`main.js` SHA-256 `235cc043…`）已同步到 Aaron_Ob 与 Documents Obsidian Vault。该批改动已提交（`622bee8`）。
 - 当前开发状态：任务菜单已接入现有全局计时器，支持自定义标题、原子切换确认、待办自动转进行中、只读任务计时和任务页实时计时条；72 项核心自动测试、每日流程临时 Git vault 24 次写入、计时器临时 Git vault 9 次写入和生产打包已通过。最终构建已同步到 Aaron_Ob 与 Documents Obsidian Vault，两个安装目录的 `main.js`、`styles.css`、`manifest.json` 与工作区哈希一致。
 - 任务模块 Phase 1 已完成：真实 Aaron_Ob vault 索引 625 条任务，面板显示活跃 453、逾期 18、今天 2、待分类 433。
 - 任务模块 Phase 2 已完成：四态菜单、完成/重新打开快捷按钮、终态日期、严格唯一定位、失败重扫和写作统计抑制已接入；异常、未知状态、循环和重复任务保持只读或拒写。
@@ -92,6 +97,8 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 任务中心 UI 重设计已完成：顶部双视图切换、最后视图持久化、四统计卡、即时搜索、状态/优先级/来源组合筛选、过滤计数、未来三组、已结束合并、桌面完整浮层、触屏行内展开，以及统一 portal 状态菜单、更多菜单和筛选浮层均已接入。
 - 响应式样式使用任务视图容器查询，覆盖 `≤320px`、`321–520px`、`>520px`；极窄侧栏固定 2×2 统计与收口筛选，不再常驻编辑、顺延、删除按钮，深色与浅色均使用 Obsidian 主题变量和 `color-mix`。
 - 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 72 个核心用例及独立临时 Git vault 集成验证；除原有任务、每日流程和计时数据边界外，已覆盖任务计时资格、Markdown 标题清理、切换竞态、计时失败不改状态、状态回写部分成功、只读任务和计时条资源清理。
+- 2026-09-03 起版本为 `0.2.0`，`versions.json` 已补齐，仓库具备打 `v*` tag 触发 `release.yml` 发布 GitHub Release 的条件。截至该日仓库尚无任何 tag，从未发布过 Release。
+- 真实 vault 的计时写入（开始、停止、原子切换）至今仍未验证，仅有临时 Git vault 的 9 次集成写入作保障；跨日恢复无法在真实 vault 自然触发。
 
 ## 修改等级
 
@@ -220,7 +227,7 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 变更摘要：新增独立的每日流程定义与日记实例系统，支持多个组合、星期和生效区间、提醒、优先级、排序、启停、编辑今天/修改未来、仅今天项目加入未来和跳过今天；今天日记与组合卡双向同步，完成与跳过同时保留在组合卡和已结束区。旧模板通过预览、备份、配置笔记和生成槽位完成一次确认式迁移，历史流程从普通任务索引排除，昨天漏做只读提醒且不算逾期。
 - 涉及文件：`src/types/routine.ts`、`src/utils/routineFormat.ts`、`src/utils/routineMarker.ts`、`src/utils/routineRepository.ts`、`src/utils/routineIndex.ts`、`src/utils/routineWriter.ts`、`src/utils/routineReminder.ts`、`src/components/Routine*.ts`、`src/components/TaskPanel.ts`、`src/main.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`tests/routineVault.integration.ts`
 - 验证方式：`npm test` 49 项核心用例通过，临时 Git vault 完成 24 次真实文件写入并拒绝并发旧版本写回；`npm run build` 与 `git diff --check` 通过。Aaron_Ob 只读加载后普通任务由 628 降至 339，正确显示昨日漏做 5 项和“创建今日日记后启用每日流程”；迁移预览准确识别 `00-Templates/Daily.md.md` 的 5 项，随后取消，配置笔记、备份和模板均未改变。
-- 后续注意事项：真实 vault 尚未执行迁移；用户应在 Time Grid 中审阅并点击“确认迁移”。分支 `codex/routine-integration` 只推送、不自动合并 `main`。
+- 后续注意事项：真实 vault 尚未执行迁移；用户应在 Time Grid 中审阅并点击“确认迁移”。分支 `codex/routine-integration` 只推送、不自动合并 `main`。（2026-09-03 核实：两项均已完成——Aaron_Ob 迁移已于 2026-08-18 执行，配置笔记 `00-Templates/Time Grid Routines.md` 存在、`data.json` 的 `migrationVersion` 为 1、模板备份在 `00-Templates/副本保留/`；分支也已合并入 `main`。）
 
 ### 2026-08-02（Claude 任务卡精确校准）
 
@@ -252,7 +259,7 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 变更摘要：按已确认的 Claude Design 方案三“此刻回环”重组生产时间视图，没有另行发挥视觉方案；新增 Time Grid 内直接开始、停止和原子切换计时，以及最近活动、今日/逾期任务和每日流程建议。计时数据继续兼容 `simple-time-tracker`，新增唯一代码块与插入标记校验、未知字段保留、冲突确认、跨午夜拆分、关闭恢复和超过 24 小时人工决策；计时写入从新增字数中扣除，Task 面板、任务写入和每日流程生命周期保持不变。
 - 涉及文件：`src/components/SundialTimeView.ts`、`src/types/timer.ts`、`src/utils/timerFormat.ts`、`src/utils/timerRepository.ts`、`src/utils/timerController.ts`、`src/main.ts`、`src/views/TimeGridView.ts`、`src/utils/dailyNotes.ts`、`src/utils/dailyNotesParser.ts`、`src/utils/writingStats.ts`、`src/types/task.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`tests/timerVault.integration.ts`、`scripts/run-timer-vault-tests.mjs`、`package.json`
 - 验证方式：`npm test` 通过 64 项核心用例、每日流程临时 Git vault 24 次写入和计时器临时 Git vault 9 次写入；计时集成覆盖自动创建、开始、停止、原子切换、未知字段及并发文本保留、冲突确认、跨午夜拆分和危险内容拒写。`npm run build`、`git diff --check` 通过。Aaron_Ob 的 Obsidian 1.12.7 深色约 320px 侧栏实际加载最终构建，确认日晷布局、干净的流程建议、官方空计时块状态和原 Task 视图统计；今日日记检查前后大小与修改时间不变，未执行真实计时写入。
-- 后续注意事项：两处真实 vault 已安装同哈希最终构建；旧插件备份位于 `/private/tmp/time-grid-sundial-backup-20260802/`。真实 vault 的开始、停止、切换及跨日写入仍需用户明确授权后再做冒烟测试。工作区改动尚未提交。
+- 后续注意事项：两处真实 vault 已安装同哈希最终构建；旧插件备份位于 `/private/tmp/time-grid-sundial-backup-20260802/`。真实 vault 的开始、停止、切换及跨日写入仍需用户明确授权后再做冒烟测试。工作区改动尚未提交。（2026-09-03 核实：该批改动已提交；真实 vault 冒烟测试见 2026-09-03 条目。）
 
 ### 2026-08-02（跨日恢复指针修复与双 vault 同步）
 
@@ -277,3 +284,11 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/components/TaskTimerModal.ts`、`src/components/TaskPanel.ts`、`src/utils/taskTimer.ts`、`src/utils/taskUi.ts`、`src/utils/timerFormat.ts`、`src/components/SundialTimeView.ts`、`src/views/TimeGridView.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`PROJECT_CONTEXT.md`
 - 验证方式：`npm test` 通过 72 项核心用例、Routine 临时 vault 24 次写入和 Timer 临时 vault 9 次写入；`npm run build`、`git diff --check` 通过。在专用临时 Obsidian 1.12.7 vault 实际验证自定义标题启动、日记/计时块自动创建、待办转进行中、实时计时条、切换确认和停止后任务保持进行中；随后将同一构建安装到 Aaron_Ob 与 Documents Obsidian Vault，并确认三项插件文件哈希一致，未在真实 vault 启动计时或改写任务。
 - 后续注意事项：计时数据仍完全复用 `TimerController` / `simple-time-tracker`，不持久化任务 ID 关联；覆盖前备份位于 `/private/tmp/time-grid-task-timer-backup.URysrW`，Obsidian 需重载插件或重启后使用新构建。
+
+### 2026-09-03（文档校正、分支清理与 0.2.0 发布准备）
+
+- 修改等级：L1 局部修补（文档 + 版本号，零运行时代码改动）
+- 变更摘要：全面重写 `README.md`，补上任务中心、每日流程、内置计时器、日晷视图、数据来源表、数据安全约束、设置项清单和真实项目结构——此前 README 只描述最早的 5 个时间模块。校正 `PROJECT_CONTEXT.md` 三处过时陈述：「当前进度」章节内的「工作区改动尚未提交」直接改正为已提交（`622bee8`）；两条历史变更记录中的待办不改原文，只追加 2026-09-03 核实括注（Aaron_Ob 的流程迁移实际已于 2026-08-18 完成，`codex/routine-integration` 已合并）。「当前功能快照」补上此前遗漏的 `RoutinePromoteModal.ts`、`TaskTimerModal.ts`、`taskTimer.ts`、`routineFormat.ts`、`routineMarker.ts`。新增 `versions.json`，`manifest.json` / `package.json` / `package-lock.json` 版本统一升至 `0.2.0`。删除 4 个已完全合并进 `main` 的本地分支（`codex/routine-integration`、`codex/task-integration`、`codex/task-ui-redesign`、`cursor/sundial-timer-view`）及其残留 tracking 配置；`origin` 上的三个 codex 分支按用户决定保留作历史留档。
+- 涉及文件：`README.md`、`PROJECT_CONTEXT.md`、`versions.json`、`manifest.json`、`package.json`、`package-lock.json`
+- 验证方式：`npm test` 通过 72 项核心用例、每日流程临时 Git vault 24 次写入、计时器临时 Git vault 9 次写入；`npm run build`、`git diff --check` 通过；临时目录 `npm ci` 验证升版后的锁文件与 CI 一致（CI 用 `npm ci`）；`versions.json` 通过 JSON 解析；删分支前逐个用 `git merge-base --is-ancestor` 确认是 `main` 的祖先。最终构建已安装到 Aaron_Ob 与 Documents Obsidian Vault，三处 `main.js`（`71a21a9f…`）、`styles.css`（`0649c06d…`）、`manifest.json` SHA-256 一致；`main.js` 与上一版一致属预期，本轮未改任何 `src/` 代码。另外用真实的 `02-Daily Notes/2026-09-03.md` 内容干跑了 `inspectTimerContent` / `startTimerInContent`，结果为 `ready`、可写入——确认日记中 dataviewjs 代码块内的 `simple-time-tracker` 字面量不会被 `TRACKER_FENCE` 的行首锚定误判为第二个计时块。
+- 后续注意事项：**真实 vault 的计时冒烟测试本轮未执行**——已备份今日日记与 `data.json` 并准备好自动化流程，但用户拒绝了 Obsidian 的桌面控制授权，遂中止；测试前后校验确认 `02-Daily Notes/2026-09-03.md` 与 `data.json` 的 SHA-256 均未变化，真实 vault 零写入。因此 `0.2.0` 的计时开始/停止/原子切换在真实 vault 中仍属未验证，其保障仅来自临时 Git vault 的 9 次集成写入。跨日恢复无法在真实 vault 自然触发，不在可测范围内。备份位于会话 scratchpad 的 `vault-backup/`，已删分支的 SHA 记录在同目录 `deleted-branches.txt`。
