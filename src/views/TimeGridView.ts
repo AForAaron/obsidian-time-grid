@@ -15,6 +15,8 @@ import { RoutineMigrationModal } from '../components/RoutineMigrationModal';
 import { RoutineItemEditModal } from '../components/RoutineItemEditModal';
 import { RoutinePromoteModal } from '../components/RoutinePromoteModal';
 import { TimerController } from '../utils/timerController';
+import { TimerStopModal } from '../components/TimerStopModal';
+import { canCompleteLinkedTask, stopTaskTimer } from '../utils/taskTimer';
 
 export const TIME_GRID_VIEW = 'time-grid-view';
 
@@ -110,6 +112,7 @@ export class TimeGridView extends ItemView {
 				saveRange: this.saveTimeRange,
 				onOpenToday: () => void openOrCreateTodayDailyNote(this.app),
 				onDateClick: (date) => void openOrCreateDailyNoteForDate(this.app, date, true),
+				requestStop: () => this.requestStopTimer(),
 			}
 		);
 		this.taskPanel = new TaskPanel(this.taskPane, this.app, this.taskIndex, {
@@ -120,7 +123,10 @@ export class TimeGridView extends ItemView {
 				getSnapshot: () => this.timerController.getSnapshot(),
 				onChange: (callback) => this.timerController.onChange(callback),
 				start: (name) => this.timerController.start(name),
-				stop: () => this.timerController.stop(),
+				requestStop: () => this.requestStopTimer(),
+				linkTask: (task) => this.timerController.linkRunningTimer(task),
+				getLinkedTask: () => this.timerController.getLinkedTask(),
+				completeTask: (task) => this.taskWriter.setStatus(task, 'done'),
 				openTimeView: () => {
 					this.activeMode = 'time';
 					this.applyMode(true);
@@ -176,6 +182,45 @@ export class TimeGridView extends ItemView {
 
 		// 初始渲染
 		this.updateAll();
+	}
+
+	/**
+	 * 唯一的停止入口。有可完成的关联任务时先弹窗询问（因此「继续计时」才有意义），
+	 * 否则保持原有行为直接停止。
+	 */
+	private async requestStopTimer(): Promise<void> {
+		const snapshot = this.timerController.getSnapshot();
+		const linked = snapshot.status === 'running' ? this.timerController.getLinkedTask() : null;
+		if (!linked || !canCompleteLinkedTask(linked)) {
+			const result = await this.timerController.stop();
+			if (!result.ok) new Notice(result.message);
+			else new Notice('计时已停止；任务状态保持不变');
+			return;
+		}
+		new TimerStopModal(this.app, {
+			task: linked,
+			getSnapshot: () => this.timerController.getSnapshot(),
+			openTimeView: () => {
+				this.activeMode = 'time';
+				this.applyMode(true);
+				this.modeButtons.get('time')?.focus();
+			},
+			stop: (complete) => {
+				// 必须在停止之前解析：计时一停，关联就按 stateKey 变化被判定失效。
+				// 这样拿到的是弹窗打开期间可能已被外部改写的最新任务原文。
+				const target = this.timerController.getLinkedTask() ?? linked;
+				return stopTaskTimer({
+					stopTimer: () => this.timerController.stop(),
+					complete: complete
+						? async () => {
+							const result = await this.taskWriter.setStatus(target, 'done');
+							if (result.ok && target.routine) await this.routineIndex.rebuild();
+							return result;
+						}
+						: undefined,
+				});
+			},
+		}).open();
 	}
 
 	async onClose(): Promise<void> {

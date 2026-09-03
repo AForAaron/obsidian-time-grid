@@ -1,13 +1,19 @@
 import { RoutineIndex } from './routineIndex';
 import { TaskIndex } from './taskIndex';
 import {
+	TaskTimerLink,
 	TimerActionResult,
 	TimerRecoveryPointer,
 	TimerRecoveryState,
 	TimerSnapshot,
 	TimerSuggestion,
 } from '../types/timer';
+import { TGTask } from '../types/task';
 import { getDailyNoteFilename } from './dailyNotesParser';
+import { timerStateKey, timerSuggestionName } from './timerFormat';
+import { resolveLinkedTask } from './taskTimer';
+
+export { timerSuggestionName } from './timerFormat';
 import { TimerRepository } from './timerRepository';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -25,6 +31,8 @@ export class TimerController {
 	private midnightTimer: number | null = null;
 	private refreshing = false;
 	private pendingStart: string | null = null;
+	/** 只存在于内存：Obsidian 重载后关联即消失，绝不落盘、绝不按名称反查。 */
+	private taskLink: TaskTimerLink | null = null;
 	private taskUnsubscribe: (() => void) | null = null;
 	private routineUnsubscribe: (() => void) | null = null;
 
@@ -51,6 +59,32 @@ export class TimerController {
 
 	getSuggestions(): TimerSuggestion[] {
 		return this.suggestions;
+	}
+
+	/**
+	 * 记住「当前这次计时是从这条任务点开的」。只应在 start() 成功返回之后调用——
+	 * 那时 refresh() 已跑完，快照里的 stateKey 才是这段计时的真实身份。
+	 */
+	linkRunningTimer(task: TGTask): void {
+		if (this.snapshot.status !== 'running') return;
+		this.taskLink = {
+			filePath: task.filePath,
+			raw: task.raw,
+			stateKey: timerStateKey(this.snapshot),
+		};
+	}
+
+	getTaskLink(): TaskTimerLink | null {
+		return this.taskLink;
+	}
+
+	/** 按原文唯一性重新定位关联任务；定位不到或有重复一律返回 null。 */
+	getLinkedTask(): TGTask | null {
+		return this.taskLink ? resolveLinkedTask(this.taskLink, this.taskIndex.getAll()) : null;
+	}
+
+	clearTaskLink(): void {
+		this.taskLink = null;
 	}
 
 	onChange(callback: () => void): () => void {
@@ -212,6 +246,14 @@ export class TimerController {
 		this.notify();
 	}
 
+	/**
+	 * 计时身份一变（停止、切换活动、跨日重建、进入冲突/异常态）就丢弃关联。
+	 * 这一个判定覆盖了所有失效场景，不需要在各处手动清理。
+	 */
+	private invalidateStaleTaskLink(): void {
+		if (this.taskLink && timerStateKey(this.snapshot) !== this.taskLink.stateKey) this.taskLink = null;
+	}
+
 	private async setRecovery(active: TimerRecoveryPointer | null): Promise<void> {
 		const previous = this.getRecovery().active;
 		if (samePointer(previous, active)) return;
@@ -219,6 +261,7 @@ export class TimerController {
 	}
 
 	private notify(): void {
+		this.invalidateStaleTaskLink();
 		for (const listener of this.listeners) listener();
 	}
 
@@ -232,14 +275,6 @@ export class TimerController {
 			void this.refresh(new Date());
 		}, Math.max(1, midnight.getTime() - now.getTime()));
 	}
-}
-
-export function timerSuggestionName(value: string): string {
-	return value
-		.replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
-		.replace(/==|\*{1,3}|_{1,3}|~~|`/g, '')
-		.replace(/\s+/g, ' ')
-		.trim();
 }
 
 function samePointer(a: TimerRecoveryPointer | null, b: TimerRecoveryPointer | null): boolean {

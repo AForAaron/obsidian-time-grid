@@ -11,6 +11,8 @@ interface SundialTimeViewOptions {
 	saveRange: (range: TimeRange) => Promise<void>;
 	onDateClick: (date: Date) => void;
 	onOpenToday: () => void;
+	/** 统一停止入口：有关联任务时会先弹窗询问是否同时完成。 */
+	requestStop: () => Promise<void>;
 }
 
 type ButtonVariant = 'primary' | 'neutral' | 'danger-quiet' | 'quiet';
@@ -352,7 +354,7 @@ export class SundialTimeView {
 		});
 		this.timerElapsed = main.createDiv({ cls: 'tg-timer-elapsed', text: formatTimerElapsed(Date.now() - Date.parse(entry.startTime)) });
 		const actions = this.timerPanel.createDiv('tg-timer-actions');
-		this.createButton(actions, 'danger-quiet', '停止', () => void this.runAction(() => this.timerController.stop()), STOP_ICON);
+		this.createButton(actions, 'danger-quiet', '停止', () => void this.options.requestStop(), STOP_ICON);
 		this.timerPanel.createDiv({ cls: 'tg-timer-switch-label', text: '切换活动 · 开始新活动会自动结束当前活动' });
 		this.createStartRow('输入新的活动', '切换', 'neutral', false);
 		if (this.switchMessage) this.timerPanel.createDiv({ cls: 'tg-timer-hint', text: this.switchMessage });

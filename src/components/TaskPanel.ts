@@ -32,7 +32,7 @@ import { RoutineIndex } from '../utils/routineIndex';
 import { displayRoutineTitle } from '../utils/routineMarker';
 import { isRoutineReminderDue } from '../utils/routineReminder';
 import { formatTimerElapsed } from '../utils/timerFormat';
-import { canStartTimerFromTask, startTaskTimer, taskTimerDefaultName } from '../utils/taskTimer';
+import { canCompleteLinkedTask, canStartTimerFromTask, startTaskTimer, taskTimerDefaultName } from '../utils/taskTimer';
 
 type PersistedSection = 'unsorted' | 'goal' | 'future' | 'done';
 
@@ -53,7 +53,12 @@ interface TaskPanelOptions {
 		getSnapshot: () => TimerSnapshot;
 		onChange: (callback: () => void) => () => void;
 		start: (name: string) => Promise<TimerActionResult>;
-		stop: () => Promise<TimerActionResult>;
+		/** 统一停止入口：有关联任务时会先弹窗询问是否同时完成。 */
+		requestStop: () => Promise<void>;
+		/** 计时成功启动后记录「这次计时来自这条任务」，只存在于内存。 */
+		linkTask: (task: TGTask) => void;
+		getLinkedTask: () => TGTask | null;
+		completeTask: (task: TGTask) => Promise<WriteResult>;
 		openTimeView: () => void;
 	};
 }
@@ -338,9 +343,7 @@ export class TaskPanel {
 		this.timerActionBusy = true;
 		this.renderTimerStrip();
 		try {
-			const result = await this.options.timer.stop();
-			if (!result.ok) new Notice(result.message);
-			else new Notice('计时已停止；任务状态保持不变');
+			await this.options.timer.requestStop();
 		} catch (error) {
 			new Notice(`停止计时失败：${String(error)}`);
 		} finally {
@@ -1045,13 +1048,29 @@ export class TaskPanel {
 			taskAlreadyInProgress: task.status === 'in-progress',
 			getSnapshot: timer.getSnapshot,
 			openTimeView: timer.openTimeView,
-			start: (name) => startTaskTimer(task, name, {
-				startTimer: timer.start,
-				canUpdateStatus: taskWritable,
-				setInProgress: taskWritable && this.options.actions
-					? () => this.runMutation(task, () => this.options.actions!.setStatus(task, 'in-progress'))
-					: undefined,
-			}),
+			getCompletablePreviousName: () => {
+				const previous = timer.getLinkedTask();
+				if (!previous || previous.filePath === task.filePath && previous.raw === task.raw) return null;
+				return canCompleteLinkedTask(previous) ? taskTimerDefaultName(previous) : null;
+			},
+			start: (name, completePrevious) => {
+				// 必须在切换之前取：切换成功后关联会被换成新任务。
+				const previous = completePrevious ? timer.getLinkedTask() : null;
+				return startTaskTimer(task, name, {
+					startTimer: async (activityName) => {
+						const result = await timer.start(activityName);
+						if (result.ok) timer.linkTask(task);
+						return result;
+					},
+					canUpdateStatus: taskWritable,
+					setInProgress: taskWritable && this.options.actions
+						? () => this.runMutation(task, () => this.options.actions!.setStatus(task, 'in-progress'))
+						: undefined,
+					completePrevious: previous && canCompleteLinkedTask(previous)
+						? () => timer.completeTask(previous)
+						: undefined,
+				});
+			},
 		}).open();
 	}
 

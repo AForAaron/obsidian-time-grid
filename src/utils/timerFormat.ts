@@ -1,4 +1,4 @@
-import { RunningTimerEntry, TimerActionResult } from '../types/timer';
+import { RunningTimerEntry, TimerActionResult, TimerSnapshot } from '../types/timer';
 
 export const TIMER_SLOT_START = '<!-- time-grid-timer-slot:start -->';
 export const TIMER_SLOT_END = '<!-- time-grid-timer-slot:end -->';
@@ -296,4 +296,23 @@ export function formatTimerElapsed(ms: number): string {
 	const seconds = Math.max(0, Math.floor(ms / 1000));
 	const pad = (value: number) => String(value).padStart(2, '0');
 	return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds % 3600 / 60))}:${pad(seconds % 60)}`;
+}
+
+/**
+ * 计时状态的身份指纹。运行中时包含活动名与开始时间，
+ * 因此切换活动、停止、跨日重建都会得到不同的值。
+ */
+export function timerStateKey(snapshot: TimerSnapshot): string {
+	if (snapshot.status !== 'running') return snapshot.status;
+	const running = snapshot.runningEntries[0];
+	return running ? `running\u0000${running.name}\u0000${running.startTime}` : 'running';
+}
+
+/** 把任务/流程标题清理成适合作为计时活动名的纯文本。 */
+export function timerSuggestionName(value: string): string {
+	return value
+		.replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
+		.replace(/==|\*{1,3}|_{1,3}|~~|`/g, '')
+		.replace(/\s+/g, ' ')
+		.trim();
 }

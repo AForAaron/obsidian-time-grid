@@ -7,7 +7,9 @@ interface TaskTimerModalOptions {
 	taskWritable: boolean;
 	taskAlreadyInProgress: boolean;
 	getSnapshot: () => TimerSnapshot;
-	start: (name: string) => Promise<TaskTimerStartOutcome>;
+	/** 当前计时所关联且仍可标为完成的任务名；返回 null 时不显示勾选框。 */
+	getCompletablePreviousName: () => string | null;
+	start: (name: string, completePrevious: boolean) => Promise<TaskTimerStartOutcome>;
 	openTimeView: () => void;
 }
 
@@ -16,6 +18,7 @@ export class TaskTimerModal extends Modal {
 	private renderedStateKey = '';
 	private input: HTMLInputElement | null = null;
 	private submitButton: HTMLButtonElement | null = null;
+	private completePreviousInput: HTMLInputElement | null = null;
 	private busy = false;
 
 	constructor(app: App, options: TaskTimerModalOptions) {
@@ -31,6 +34,7 @@ export class TaskTimerModal extends Modal {
 	onClose(): void {
 		this.input = null;
 		this.submitButton = null;
+		this.completePreviousInput = null;
 		this.contentEl.empty();
 	}
 
@@ -39,6 +43,7 @@ export class TaskTimerModal extends Modal {
 		this.contentEl.empty();
 		this.input = null;
 		this.submitButton = null;
+		this.completePreviousInput = null;
 		this.busy = false;
 		if (snapshot.status !== 'idle' && snapshot.status !== 'running') {
 			this.renderBlocked(snapshot, error);
@@ -61,6 +66,18 @@ export class TaskTimerModal extends Modal {
 				cls: 'tg-task-timer-switch-warning',
 				text: '确认后会在同一时刻结束当前活动，并开始新的计时。',
 			});
+			const previousName = this.options.getCompletablePreviousName();
+			if (previousName) {
+				const row = form.createDiv('tg-task-timer-complete-previous');
+				const checkboxId = 'tg-task-timer-complete-previous-input';
+				this.completePreviousInput = row.createEl('input', {
+					attr: { type: 'checkbox', id: checkboxId },
+				});
+				row.createEl('label', {
+					text: `同时把「${previousName}」标为完成`,
+					attr: { for: checkboxId },
+				});
+			}
 		}
 
 		const field = form.createDiv('tg-task-modal-field');
@@ -150,12 +167,16 @@ export class TaskTimerModal extends Modal {
 			return;
 		}
 
+		const completePrevious = Boolean(this.completePreviousInput?.checked);
 		this.setBusy(true);
 		try {
-			const outcome = await this.options.start(name);
+			const outcome = await this.options.start(name, completePrevious);
 			if (!outcome.ok) {
 				this.render(name, outcome.timerResult.message);
 				return;
+			}
+			if (outcome.previousUpdate === 'update-failed' && outcome.previousResult && !outcome.previousResult.ok) {
+				new Notice(`计时已切换，但上一个任务未标为完成：${outcome.previousResult.message}`);
 			}
 			if (outcome.statusUpdate === 'update-failed' && outcome.statusResult && !outcome.statusResult.ok) {
 				new Notice(`计时已开始，但任务状态未更新：${outcome.statusResult.message}`);

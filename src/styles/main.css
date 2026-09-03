@@ -2704,6 +2704,42 @@
 	margin-top: -5px;
 }
 
+/* 切换弹窗里的「同时把上一个任务标为完成」勾选，默认不勾。 */
+.tg-task-timer-complete-previous {
+	display: flex;
+	align-items: flex-start;
+	gap: 7px;
+	margin-top: -2px;
+}
+
+.tg-task-timer-complete-previous input {
+	margin: 1px 0 0;
+	flex: 0 0 auto;
+}
+
+.tg-task-timer-complete-previous label {
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--text-muted);
+	word-break: break-word;
+	cursor: pointer;
+}
+
+/* 停止弹窗：已计时时长与关联任务。 */
+.tg-timer-stop-elapsed {
+	font-family: var(--font-monospace);
+	font-size: 15px;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-normal);
+}
+
+.tg-timer-stop-task {
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--text-normal);
+	word-break: break-word;
+}
+
 .tg-task-timer-blocked {
 	border-color: color-mix(in srgb, var(--text-error) 38%, var(--background-modifier-border));
 	background: color-mix(in srgb, var(--text-error) 7%, var(--background-secondary));

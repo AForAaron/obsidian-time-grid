@@ -14,7 +14,7 @@ import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange,
 import { getEffectiveWritingDelta, normalizeTimeGridData } from '../src/utils/writingStats';
 import { countFilteredSections, createEmptyTaskFilters, filterTasks, groupFutureTasks, hasActiveTaskFilters } from '../src/utils/taskView';
 import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer } from '../src/utils/taskUi';
-import { canStartTimerFromTask, startTaskTimer, taskTimerDefaultName, timerStateKey } from '../src/utils/taskTimer';
+import { canCompleteLinkedTask, canStartTimerFromTask, resolveLinkedTask, startTaskTimer, stopTaskTimer, taskTimerDefaultName, timerStateKey } from '../src/utils/taskTimer';
 import {
 	activeRoutineGroups,
 	adoptLegacyRoutineInstances,
@@ -805,6 +805,155 @@ test('sundial production CSS preserves the approved Claude Design breakpoints an
 	assert.match(css, /--tg-heatmap-cell-size: 10px/);
 });
 
+test('linked task resolves only on an unambiguous single match', () => {
+	const todo = parseTaskLine('- [ ] 写周报', 'Inbox.md', 0, '2026-09-03', '#goal');
+	const other = parseTaskLine('- [ ] 别的事', 'Inbox.md', 1, '2026-09-03', '#goal');
+	const duplicate = parseTaskLine('- [ ] 写周报', 'Inbox.md', 7, '2026-09-03', '#goal');
+	const elsewhere = parseTaskLine('- [ ] 写周报', 'Other.md', 0, '2026-09-03', '#goal');
+	const link = { filePath: 'Inbox.md', raw: '- [ ] 写周报', stateKey: 'running' };
+
+	assert.equal(resolveLinkedTask(link, [todo, other]), todo);
+	// 同一文件里出现两行完全相同的任务：宁可丢失关联也不猜
+	assert.equal(resolveLinkedTask(link, [todo, duplicate]), null);
+	// 任务被删除或原文被改写
+	assert.equal(resolveLinkedTask(link, [other]), null);
+	// 同名但在别的文件里，不算命中
+	assert.equal(resolveLinkedTask(link, [elsewhere]), null);
+});
+
+test('only writable non-terminal tasks can be completed from the stop dialog', () => {
+	const todo = parseTaskLine('- [ ] 写周报', 'Inbox.md', 0, '2026-09-03', '#goal');
+	const doing = parseTaskLine('- [/] 写周报', 'Inbox.md', 0, '2026-09-03', '#goal');
+	const done = parseTaskLine('- [x] 写周报 ✅ 2026-09-03', 'Inbox.md', 0, '2026-09-03', '#goal');
+	const cancelled = parseTaskLine('- [-] 写周报 ❌ 2026-09-03', 'Inbox.md', 0, '2026-09-03', '#goal');
+	const recurring = parseTaskLine('- [ ] 写周报 🔁 every week', 'Inbox.md', 0, '2026-09-03', '#goal');
+
+	assert.equal(canCompleteLinkedTask(todo), true);
+	assert.equal(canCompleteLinkedTask(doing), true);
+	assert.equal(canCompleteLinkedTask(done), false);
+	assert.equal(canCompleteLinkedTask(cancelled), false);
+	assert.equal(canCompleteLinkedTask(recurring), false);
+});
+
+test('timer state key changes whenever the running identity changes', () => {
+	const base = { preparation: 'ready' as const, dateKey: '2026-09-03', runningEntries: [] };
+	const running = (name: string, startTime: string) => timerStateKey({
+		...base,
+		status: 'running',
+		runningEntries: [{ name, startTime, path: [0] }],
+	});
+	const first = running('写周报', '2026-09-03T04:00:00.000Z');
+
+	assert.equal(running('写周报', '2026-09-03T04:00:00.000Z'), first);
+	assert.notEqual(running('别的事', '2026-09-03T04:00:00.000Z'), first);
+	assert.notEqual(running('写周报', '2026-09-03T05:00:00.000Z'), first);
+	assert.notEqual(timerStateKey({ ...base, status: 'idle' }), first);
+});
+
+testAsync('stopping a timer never touches the task when the timer write fails', async () => {
+	let statusWrites = 0;
+	const outcome = await stopTaskTimer({
+		stopTimer: async () => ({ ok: false, reason: 'conflict', message: '有多个运行中的活动' }),
+		complete: async () => {
+			statusWrites++;
+			return { ok: true };
+		},
+	});
+	assert.equal(outcome.ok, false);
+	assert.equal(statusWrites, 0);
+});
+
+testAsync('stop-only leaves the task status untouched', async () => {
+	const outcome = await stopTaskTimer({ stopTimer: async () => ({ ok: true }) });
+	assert.equal(outcome.ok, true);
+	if (outcome.ok) assert.equal(outcome.statusUpdate, 'unchanged');
+});
+
+testAsync('stop-and-complete writes the task only after the timer stopped', async () => {
+	const calls: string[] = [];
+	const outcome = await stopTaskTimer({
+		stopTimer: async () => {
+			calls.push('timer');
+			return { ok: true };
+		},
+		complete: async () => {
+			calls.push('status');
+			return { ok: true };
+		},
+	});
+	assert.deepEqual(calls, ['timer', 'status']);
+	assert.equal(outcome.ok, true);
+	if (outcome.ok) assert.equal(outcome.statusUpdate, 'updated');
+});
+
+testAsync('a failed completion after a successful stop reports partial success', async () => {
+	const rejected = await stopTaskTimer({
+		stopTimer: async () => ({ ok: true }),
+		complete: async () => ({ ok: false, reason: 'line-mismatch-ambiguous', message: '发现重复任务' }),
+	});
+	assert.equal(rejected.ok, true);
+	if (rejected.ok) {
+		assert.equal(rejected.statusUpdate, 'update-failed');
+		assert.equal(rejected.statusResult?.ok, false);
+	}
+
+	const thrown = await stopTaskTimer({
+		stopTimer: async () => ({ ok: true }),
+		complete: async () => {
+			throw new Error('磁盘错误');
+		},
+	});
+	assert.equal(thrown.ok, true);
+	if (thrown.ok) assert.equal(thrown.statusUpdate, 'update-failed');
+});
+
+testAsync('switching can complete the previous task without blocking the new timer', async () => {
+	const task = parseTaskLine('- [ ] 新任务', 'Inbox.md', 0, '2026-09-03', '#goal');
+	const calls: string[] = [];
+	const outcome = await startTaskTimer(task, '新任务', {
+		startTimer: async () => {
+			calls.push('timer');
+			return { ok: true, switchedFrom: '旧任务' };
+		},
+		canUpdateStatus: true,
+		setInProgress: async () => {
+			calls.push('status');
+			return { ok: true };
+		},
+		completePrevious: async () => {
+			calls.push('previous');
+			return { ok: false, reason: 'read-only-task', message: '循环任务' };
+		},
+	});
+	// 计时先写，旧任务的失败不影响新任务转进行中
+	assert.deepEqual(calls, ['timer', 'previous', 'status']);
+	assert.equal(outcome.ok, true);
+	if (outcome.ok) {
+		assert.equal(outcome.previousUpdate, 'update-failed');
+		assert.equal(outcome.statusUpdate, 'updated');
+	}
+});
+
+test('stop dialog and switch checkbox contracts', () => {
+	const stopModal = readFileSync(resolve('src/components/TimerStopModal.ts'), 'utf8');
+	const timerModal = readFileSync(resolve('src/components/TaskTimerModal.ts'), 'utf8');
+	const view = readFileSync(resolve('src/views/TimeGridView.ts'), 'utf8');
+	const sundial = readFileSync(resolve('src/components/SundialTimeView.ts'), 'utf8');
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	// 三个选项，且提交前重读快照
+	assert.match(stopModal, /停止并完成/);
+	assert.match(stopModal, /仅停止/);
+	assert.match(stopModal, /继续计时/);
+	assert.match(stopModal, /计时状态刚刚发生变化，请重新确认/);
+	// 两个停止入口统一走 requestStop
+	assert.match(sundial, /this\.options\.requestStop\(\)/);
+	assert.match(view, /requestStopTimer\(\)/);
+	// 无关联时保持原有的一点即停
+	assert.match(view, /canCompleteLinkedTask\(linked\)/);
+	assert.match(timerModal, /getCompletablePreviousName/);
+	assert.match(css, /\.tg-task-timer-complete-previous/);
+});
+
 test('task timer UI has modal confirmation, live strip, cleanup and narrow layout contracts', () => {
 	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
 	const modal = readFileSync(resolve('src/components/TaskTimerModal.ts'), 'utf8');
@@ -812,7 +961,7 @@ test('task timer UI has modal confirmation, live strip, cleanup and narrow layou
 	assert.match(panel, /unsubscribeTimer/);
 	assert.match(panel, /stopTimerTicker\(\)/);
 	assert.match(panel, /tg-task-timer-strip-elapsed/);
-	assert.match(panel, /this\.options\.timer\.stop\(\)/);
+	assert.match(panel, /this\.options\.timer\.requestStop\(\)/);
 	assert.match(modal, /计时状态刚刚发生变化，请重新确认/);
 	assert.match(modal, /已经正在计时，无需重复开始/);
 	assert.match(css, /\.tg-task-timer-strip/);
