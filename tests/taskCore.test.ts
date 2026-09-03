@@ -16,6 +16,18 @@ import { countFilteredSections, createEmptyTaskFilters, filterTasks, groupFuture
 import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer } from '../src/utils/taskUi';
 import { canCompleteLinkedTask, canStartTimerFromTask, resolveLinkedTask, startTaskTimer, stopTaskTimer, taskTimerDefaultName, timerStateKey } from '../src/utils/taskTimer';
 import {
+	appendTaskToInbox,
+	collidesWithExistingLine,
+	createInboxScaffold,
+	ensureTaskSlot,
+	findTaskSlot,
+	generateTaskId,
+	insertTaskLine,
+	serializeNewTaskLine,
+	TASK_SLOT_END,
+	TASK_SLOT_START,
+} from '../src/utils/taskInbox';
+import {
 	activeRoutineGroups,
 	adoptLegacyRoutineInstances,
 	getRoutineTaskLineNumbers,
@@ -952,6 +964,136 @@ test('stop dialog and switch checkbox contracts', () => {
 	assert.match(view, /canCompleteLinkedTask\(linked\)/);
 	assert.match(timerModal, /getCompletablePreviousName/);
 	assert.match(css, /\.tg-task-timer-complete-previous/);
+});
+
+test('new task lines follow the Tasks emoji format', () => {
+	assert.equal(
+		serializeNewTaskLine({ description: '写周报', created: '2026-09-03', due: '2026-09-03' }),
+		'- [ ] 写周报 ➕ 2026-09-03 📅 2026-09-03'
+	);
+	// 清除到期日后不写 📅
+	assert.equal(
+		serializeNewTaskLine({ description: '写周报', created: '2026-09-03' }),
+		'- [ ] 写周报 ➕ 2026-09-03'
+	);
+	// 🆔 只在需要时出现，且排在最后
+	assert.equal(
+		serializeNewTaskLine({ description: '写周报', created: '2026-09-03', due: '2026-09-03', id: 'ab12cd' }),
+		'- [ ] 写周报 ➕ 2026-09-03 📅 2026-09-03 🆔 ab12cd'
+	);
+	// 描述里的换行与多余空白会被压平，避免破坏单行任务格式
+	assert.equal(
+		serializeNewTaskLine({ description: '  写\n  周报  ', created: '2026-09-03' }),
+		'- [ ] 写 周报 ➕ 2026-09-03'
+	);
+});
+
+test('inbox slot is created once and never guessed when ambiguous', () => {
+	const scaffold = createInboxScaffold('Time Grid Tasks');
+	assert.match(scaffold, /<!-- time-grid-task-slot:start -->/);
+	assert.deepEqual(findTaskSlot(scaffold), {
+		start: scaffold.indexOf(TASK_SLOT_START),
+		end: scaffold.indexOf(TASK_SLOT_END),
+	});
+
+	// 空文件与无插槽文件都会补上一对插槽
+	assert.equal(ensureTaskSlot('').changed, true);
+	const appended = ensureTaskSlot('# 收件箱');
+	assert.equal(appended.changed, true);
+	assert.match(appended.content, /# 收件箱\n<!-- time-grid-task-slot:start -->/);
+	// 已有插槽时不重复添加
+	assert.equal(ensureTaskSlot(scaffold).changed, false);
+
+	// 0 个 / 多个 / 顺序颠倒一律报错拒写
+	assert.ok('error' in findTaskSlot('# 没有插槽'));
+	assert.ok('error' in findTaskSlot(`${scaffold}${scaffold}`));
+	assert.ok('error' in findTaskSlot(`${TASK_SLOT_END}\n${TASK_SLOT_START}`));
+});
+
+test('task lines are inserted before the slot end and keep CRLF', () => {
+	const lf = createInboxScaffold('Inbox');
+	const inserted = insertTaskLine(lf, '- [ ] 写周报 ➕ 2026-09-03');
+	assert.equal(inserted.changed, true);
+	assert.ok(inserted.content.indexOf('- [ ] 写周报') < inserted.content.indexOf(TASK_SLOT_END));
+
+	const crlf = createInboxScaffold('Inbox', '\r\n');
+	const crlfInserted = insertTaskLine(crlf, '- [ ] 写周报');
+	assert.ok(crlfInserted.content.includes('- [ ] 写周报\r\n'));
+	assert.ok(!/[^\r]\n/.test(crlfInserted.content));
+
+	// 追加第二条时排在第一条之后
+	const second = insertTaskLine(inserted.content, '- [ ] 另一件事');
+	assert.ok(second.content.indexOf('- [ ] 写周报') < second.content.indexOf('- [ ] 另一件事'));
+});
+
+test('duplicate detection and id generation keep later writes unambiguous', () => {
+	const content = createInboxScaffold('Inbox') + '- [ ] 写周报 ➕ 2026-09-03 🆔 aaaaaa\n';
+	assert.equal(collidesWithExistingLine(content, '- [ ] 写周报 ➕ 2026-09-03 🆔 aaaaaa'), true);
+	assert.equal(collidesWithExistingLine(content, '- [ ] 别的事'), false);
+	assert.equal(collidesWithExistingLine(content, '   '), false);
+
+	// 生成的 ID 不会撞上文件里已有的
+	let calls = 0;
+	const sequence = ['aaaaaa', 'bbbbbb'];
+	const id = generateTaskId(content, () => {
+		const word = sequence[Math.min(Math.floor(calls / 6), sequence.length - 1)];
+		const char = word[calls % 6];
+		calls++;
+		return 'abcdefghijklmnopqrstuvwxyz0123456789'.indexOf(char) / 36;
+	});
+	assert.equal(id, 'bbbbbb');
+});
+
+test('an id is added only when the new task collides with an existing line', () => {
+	const base = createInboxScaffold('Inbox');
+	const draft = { description: '写周报', created: '2026-09-03', due: '2026-09-03' };
+
+	const first = appendTaskToInbox(base, draft);
+	assert.equal(first.changed, true);
+	assert.equal(first.line, '- [ ] 写周报 ➕ 2026-09-03 📅 2026-09-03');
+	// 干净的笔记里不挂 ID
+	assert.ok(!first.content.includes('🆔'));
+
+	// 完全相同的第二条才补 ID，保证「原文全局唯一」仍成立
+	const second = appendTaskToInbox(first.content, draft);
+	assert.equal(second.changed, true);
+	assert.match(String(second.line), /🆔 [a-z0-9]{6}$/);
+	const lines = second.content.split('\n').map((line) => line.trim()).filter((line) => line.startsWith('- [ ]'));
+	assert.equal(new Set(lines).size, lines.length);
+});
+
+test('a broken inbox slot refuses the write instead of picking one', () => {
+	const duplicated = createInboxScaffold('Inbox') + createInboxScaffold('Inbox');
+	const result = appendTaskToInbox(duplicated, { description: '写周报', created: '2026-09-03' });
+	assert.equal(result.changed, false);
+	assert.equal(result.content, duplicated);
+	assert.match(String(result.error), /多个 Time Grid 任务插槽/);
+});
+
+test('inbox path falls back to the default when blank', () => {
+	assert.equal(normalizeTimeGridData({}).taskSettings.inboxPath, 'Time Grid Tasks.md');
+	assert.equal(
+		normalizeTimeGridData({ taskSettings: { inboxPath: '   ' } }).taskSettings.inboxPath,
+		'Time Grid Tasks.md'
+	);
+	assert.equal(
+		normalizeTimeGridData({ taskSettings: { inboxPath: ' Notes/Inbox.md ' } }).taskSettings.inboxPath,
+		'Notes/Inbox.md'
+	);
+});
+
+test('task creation UI contracts', () => {
+	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	const modal = readFileSync(resolve('src/components/TaskCreateModal.ts'), 'utf8');
+	const writer = readFileSync(resolve('src/utils/taskWriter.ts'), 'utf8');
+	assert.match(panel, /'新建任务'/);
+	assert.match(panel, /setIcon\(create, 'plus'\)/);
+	// 默认到期日是今天，且可清除
+	assert.match(modal, /due = getTodayKey\(\)/);
+	assert.match(modal, /'清除'/);
+	// 新建同样走 Vault.process 并扣除写作统计
+	assert.match(writer, /vault\.process/);
+	assert.match(writer, /addTaskWriteSuppression/);
 });
 
 test('task timer UI has modal confirmation, live strip, cleanup and narrow layout contracts', () => {

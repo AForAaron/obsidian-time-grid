@@ -15,6 +15,7 @@ import { TimerActionResult, TimerSnapshot } from '../types/timer';
 import { TaskEditModal } from './TaskEditModal';
 import { TaskDeleteConfirmModal } from './TaskDeleteConfirmModal';
 import { TaskTimerModal } from './TaskTimerModal';
+import { TaskCreateModal } from './TaskCreateModal';
 import { TaskIndex } from '../utils/taskIndex';
 import { getTodayKey, sortTasks, terminalDate } from '../utils/taskParser';
 import { getTaskWriteBlockReason } from '../utils/taskWriter';
@@ -48,6 +49,7 @@ interface TaskPanelOptions {
 		updateTask: (task: TGTask, patch: TaskPatch) => Promise<WriteResult>;
 		postponeTask: (task: TGTask, days: number) => Promise<WriteResult>;
 		deleteTask: (task: TGTask) => Promise<WriteResult>;
+		createTask: (description: string, due: string | null) => Promise<WriteResult>;
 	};
 	timer?: {
 		getSnapshot: () => TimerSnapshot;
@@ -253,6 +255,14 @@ export class TaskPanel {
 		const titleBox = heading.createDiv('tg-task-center-title-box');
 		titleBox.createEl('h2', { cls: 'tg-task-center-title', text: '任务中心' });
 		titleBox.createDiv({ cls: 'tg-task-center-subtitle', text: '聚焦现在，轻松安排接下来' });
+		if (this.options.actions) {
+			const create = heading.createEl('button', {
+				cls: 'tg-task-icon-button',
+				attr: { 'aria-label': '新建任务', title: '新建任务' },
+			});
+			setIcon(create, 'plus');
+			create.addEventListener('click', () => this.openCreateModal());
+		}
 		const refresh = heading.createEl('button', {
 			cls: 'tg-task-icon-button',
 			attr: { 'aria-label': '重新索引任务', title: '重新索引任务' },
@@ -1071,6 +1081,14 @@ export class TaskPanel {
 						: undefined,
 				});
 			},
+		}).open();
+	}
+
+	private openCreateModal(): void {
+		if (!this.options.actions) return;
+		new TaskCreateModal(this.app, {
+			inboxPath: this.options.getSettings().inboxPath,
+			create: (description, due) => this.options.actions!.createTask(description, due),
 		}).open();
 	}
 

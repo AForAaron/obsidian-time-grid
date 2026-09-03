@@ -1,6 +1,6 @@
 import { Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 import { TimeGridView, TIME_GRID_VIEW } from './views/TimeGridView';
-import { TaskSettings } from './types/task';
+import { DEFAULT_TASK_SETTINGS, TaskSettings } from './types/task';
 import { TaskIndex } from './utils/taskIndex';
 import { TaskWriter } from './utils/taskWriter';
 import { normalizeTimeGridData, TimeGridPluginData, WritingStatsTracker } from './utils/writingStats';
@@ -215,6 +215,13 @@ class TimeGridSettingTab extends PluginSettingTab {
 			.setName('排除路径')
 			.setDesc('Vault 根目录相对路径，逗号分隔。路径仅匹配自身及子目录。')
 			.addText((text) => text.setPlaceholder('00-Templates').setValue(settings.excludedPaths).onChange((value) => this.plugin.updateTaskSettings({ excludedPaths: value })));
+		new Setting(containerEl)
+			.setName('新建任务收件箱')
+			.setDesc('插件内新建的任务会写入这个文件。留空则回落到默认路径。')
+			.addText((text) => text
+				.setPlaceholder(DEFAULT_TASK_SETTINGS.inboxPath)
+				.setValue(settings.inboxPath)
+				.onChange((value) => this.plugin.updateTaskSettings({ inboxPath: value.trim() || DEFAULT_TASK_SETTINGS.inboxPath })));
 		new Setting(containerEl)
 			.setName('长期任务标签')
 			.setDesc('默认 #goal；修改后任务会立即重新分类。')

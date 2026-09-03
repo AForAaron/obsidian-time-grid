@@ -12,6 +12,8 @@ import { TaskIndex } from './taskIndex';
 import { getTodayKey } from './taskParser';
 import { countMixedWords, WritingStatsTracker } from './writingStats';
 import { serializeRoutineTaskMarker } from './routineMarker';
+import { appendTaskToInbox, createInboxScaffold, normalizeDescription } from './taskInbox';
+import { ensureParentFolder } from './vaultPaths';
 
 interface ContentEditResult {
 	content: string;
@@ -40,6 +42,63 @@ export class TaskWriter {
 		this.index = index;
 		this.getSettings = getSettings;
 		this.writingStats = writingStats;
+	}
+
+	/**
+	 * 在收件箱新建一条任务。这是任务模块唯一「新增行」的写入路径：
+	 * 没有可定位的原文，改用唯一插槽确定位置，撞车时补 🆔 以保证之后仍可安全改写。
+	 */
+	async createTask(description: string, due: string | null): Promise<WriteResult> {
+		const normalized = normalizeDescription(description);
+		if (!normalized) return { ok: false, reason: 'read-only-task', message: '任务内容不能为空' };
+
+		const path = this.getSettings().inboxPath.trim();
+		if (!path) return { ok: false, reason: 'file-missing', message: '未配置收件箱文件路径' };
+
+		let file: TFile;
+		try {
+			file = await this.ensureInboxFile(path);
+		} catch (error) {
+			return { ok: false, reason: 'io-error', message: String(error) };
+		}
+
+		const draft = { description: normalized, due: due ?? undefined, created: getTodayKey() };
+		let writeResult: WriteResult = { ok: true };
+		let suppressedDelta = 0;
+		try {
+			await this.app.vault.process(file, (content) => {
+				const mutation = appendTaskToInbox(content, draft);
+				if (mutation.error) {
+					writeResult = { ok: false, reason: 'line-mismatch-ambiguous', message: mutation.error };
+					return content;
+				}
+				suppressedDelta = countMixedWords(mutation.content) - countMixedWords(content);
+				this.writingStats.addTaskWriteSuppression(file.path, suppressedDelta);
+				return mutation.content;
+			});
+		} catch (error) {
+			if (suppressedDelta !== 0) this.writingStats.addTaskWriteSuppression(file.path, -suppressedDelta);
+			writeResult = { ok: false, reason: 'io-error', message: String(error) };
+		}
+
+		if (!writeResult.ok) {
+			new Notice(`${writeResult.message}。请检查收件箱文件后重试`, 8000);
+			return writeResult;
+		}
+		await this.index.reindexFile(file);
+		return writeResult;
+	}
+
+	private async ensureInboxFile(path: string): Promise<TFile> {
+		const existing = this.app.vault.getAbstractFileByPath(path);
+		if (existing instanceof TFile) return existing;
+		if (existing) throw new Error(`收件箱路径已被目录占用：${path}`);
+		await ensureParentFolder(this.app, path);
+		const title = path.split('/').pop()?.replace(/\.md$/i, '') || 'Time Grid Tasks';
+		const created = await this.app.vault.create(path, createInboxScaffold(title));
+		// 新建的收件箱本身不算用户手写的内容，不计入新增字数。
+		this.writingStats.addTaskWriteSuppression(created.path, countMixedWords(createInboxScaffold(title)));
+		return created;
 	}
 
 	toggleDone(task: TGTask): Promise<WriteResult> {

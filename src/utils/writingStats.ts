@@ -197,6 +197,7 @@ export function normalizeTimeGridData(raw: unknown): TimeGridPluginData {
 		taskSettings: {
 			...DEFAULT_TASK_SETTINGS,
 			...(taskSettings ?? {}),
+			inboxPath: normalizeInboxPath(taskSettings?.inboxPath),
 			doneRange: normalizeDoneRange(taskSettings?.doneRange),
 			renderLimit: normalizeRenderLimit(taskSettings?.renderLimit),
 		},
@@ -266,4 +267,9 @@ function normalizeRoutineSettings(value: RoutineSettings | undefined): RoutineSe
 			: 0,
 		reminderLog: { ...(value?.reminderLog ?? {}) },
 	};
+}
+
+function normalizeInboxPath(value: unknown): string {
+	const path = typeof value === 'string' ? value.trim() : '';
+	return path || DEFAULT_TASK_SETTINGS.inboxPath;
 }

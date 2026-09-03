@@ -96,6 +96,8 @@ export type DoneRange = 'today' | '7days' | 'all';
 export interface TaskSettings {
 	enabled: boolean;
 	excludedPaths: string;
+	/** 插件内新建任务的落盘文件（vault 相对路径）。 */
+	inboxPath: string;
 	goalTag: string;
 	recordTerminalDate: boolean;
 	showFileName: boolean;
@@ -117,6 +119,7 @@ export interface TimeGridUiState {
 export const DEFAULT_TASK_SETTINGS: TaskSettings = {
 	enabled: true,
 	excludedPaths: '00-Templates',
+	inboxPath: 'Time Grid Tasks.md',
 	goalTag: '#goal',
 	recordTerminalDate: true,
 	showFileName: false,

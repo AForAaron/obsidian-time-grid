@@ -1,4 +1,4 @@
-import { App, normalizePath, TFile, TFolder } from 'obsidian';
+import { App, TFile } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import {
 	EMPTY_ROUTINE_DOCUMENT,
@@ -17,6 +17,7 @@ import {
 	serializeRoutineDocument,
 } from './routineFormat';
 import { countMixedWords, WritingStatsTracker } from './writingStats';
+import { ensureParentFolder } from './vaultPaths';
 
 export interface RoutineDefinitionLoadResult {
 	document: RoutineDocument;
@@ -221,19 +222,4 @@ function availableBackupPath(app: App, preferred: string): string {
 
 function pad(value: number): string {
 	return String(value).padStart(2, '0');
-}
-
-async function ensureParentFolder(app: App, filePath: string): Promise<void> {
-	const normalized = normalizePath(filePath);
-	const slash = normalized.lastIndexOf('/');
-	if (slash < 0) return;
-	const parts = normalized.slice(0, slash).split('/');
-	let current = '';
-	for (const part of parts) {
-		current = current ? `${current}/${part}` : part;
-		const existing = app.vault.getAbstractFileByPath(current);
-		if (existing instanceof TFolder) continue;
-		if (existing) throw new Error(`无法创建目录，路径已被文件占用：${current}`);
-		await app.vault.createFolder(current);
-	}
 }

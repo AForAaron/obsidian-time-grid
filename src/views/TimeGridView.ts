@@ -170,6 +170,7 @@ export class TimeGridView extends ItemView {
 				},
 				postponeTask: (task, days) => this.taskWriter.postponeTask(task, days),
 				deleteTask: (task) => this.taskWriter.deleteTask(task),
+				createTask: (description, due) => this.taskWriter.createTask(description, due),
 			},
 		});
 		this.activeMode = this.getActiveMode();
