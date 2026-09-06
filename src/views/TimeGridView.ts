@@ -42,6 +42,13 @@ export class TimeGridView extends ItemView {
 	private taskPane: HTMLElement;
 	private modeButtons = new Map<TimeGridMode, HTMLButtonElement>();
 	private updateInterval: number;
+	// sticky 固定区分隔线：滚动位置 > 0 时给唯一滚动容器（.tg-container = contentEl）加
+	// .is-scrolled，样式全由 CSS 出（分隔线/投影），这里只负责状态类。passive 监听，
+	// onClose 时移除并清掉状态类。不用 rAF 节流：leaf 折叠或窗口失焦时 rAF 会暂停，
+	// 分隔线会卡在消失态；每次滚动只有一次 scrollTop 读取 + 一次 class 切换，成本可忽略。
+	private readonly handleContainerScroll = (): void => {
+		this.contentEl.toggleClass('is-scrolled', this.contentEl.scrollTop > 0);
+	};
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -176,6 +183,10 @@ export class TimeGridView extends ItemView {
 		this.activeMode = this.getActiveMode();
 		this.applyMode(false);
 
+		// sticky 固定区：初始同步一次（恢复滚动位置时不留残影），之后随滚动驱动分隔线
+		this.handleContainerScroll();
+		this.contentEl.addEventListener('scroll', this.handleContainerScroll, { passive: true });
+
 		// 每秒更新一次（节流到 1 秒，降低内存占用）
 		this.updateInterval = window.setInterval(() => {
 			this.updateAll();
@@ -228,6 +239,8 @@ export class TimeGridView extends ItemView {
 		if (this.updateInterval) {
 			clearInterval(this.updateInterval);
 		}
+		this.contentEl.removeEventListener('scroll', this.handleContainerScroll);
+		this.contentEl.removeClass('is-scrolled');
 		this.taskPanel?.destroy();
 		this.sundialTimeView?.destroy();
 	}

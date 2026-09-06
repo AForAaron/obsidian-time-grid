@@ -1,0 +1,32 @@
+---
+description: TimeGrid 插件修改后自动 build + 安装到 vault
+alwaysApply: true
+---
+
+# TimeGrid 开发部署
+
+修改插件源码或构建产物相关文件（`src/`、`styles/`、`manifest.json`、`esbuild.config.mjs`、`install.sh` 等）后，**同一会话内必须**完成部署，不要等用户提醒。
+
+## 必做步骤（固化操作，不固化路径）
+
+1. 执行 `npm run deploy`（等价于 `npm run build && ./install.sh`）
+2. 若 build 或 install 失败，修复问题后重试，直到成功
+3. 在回复末尾简短提醒用户：**在 Obsidian 中 Reload 插件**（设置 → 第三方插件 → 关闭再开启，或 Cmd+R）
+
+## Vault 路径解析优先级
+
+`install.sh` 无参时按以下顺序确定目标 vault **根目录**（含 `.obsidian/` 的那一层，不是 vault 内的笔记子文件夹如 `00-Templates`）：
+
+1. 环境变量 `TIMEGRID_VAULT`
+2. 项目根 `.timegrid-vault` 文件（一行绝对路径，已 gitignore，可参考 `.timegrid-vault.example`）
+3. `~/Library/Application Support/obsidian/obsidian.json` 中当前 **open** 的 vault
+4. 若多个 open 或仍不确定：脚本列出候选并退出；agent 应询问用户或让用户设置上述配置
+
+显式指定：`./install.sh "/path/to/vault"` 或 `TIMEGRID_VAULT="/path/to/vault" npm run deploy`
+
+## 注意
+
+- 仅改文档、测试且不影响构建产物时，可跳过 deploy
+- 不要回滚用户其他未提交改动
+- **不要**在规则或脚本中 hardcode 特定 vault 名（如 Aaron_Ob、Documents）作为唯一默认
+- 用户换 vault 时，改 `.timegrid-vault` 或设 `TIMEGRID_VAULT` 即可，无需改仓库配置

@@ -174,7 +174,11 @@ export function activeRoutineGroups(document: RoutineDocument, dateKey: string):
 
 export function serializeRoutineInstances(document: RoutineDocument, dateKey: string): string {
 	const lines = [`${ROUTINE_INSTANCE_START_PREFIX}${serializeHtmlAttributes({ date: dateKey })} -->`];
-	for (const group of activeRoutineGroups(document, dateKey)) {
+	const groups = activeRoutineGroups(document, dateKey);
+	for (const [index, group] of groups.entries()) {
+		// Obsidian merges consecutive quote lines into one callout. A raw blank
+		// line (not `>`) is required so each group renders as its own [!CHECK].
+		if (index > 0) lines.push('');
 		lines.push(`> [!CHECK] :LiRotateCw: ${sanitizeSingleLine(group.title)}`);
 		lines.push(`> ${GROUP_INSTANCE_PREFIX}${serializeHtmlAttributes({ id: group.id })} -->`);
 		for (const item of group.items) {
@@ -189,10 +193,43 @@ export function serializeRoutineInstances(document: RoutineDocument, dateKey: st
 			});
 			lines.push(`> - [ ] ${sanitizeSingleLine(item.title)}${priority ? ` ${priority}` : ''} ${marker}`);
 		}
-		lines.push('>');
 	}
 	lines.push(ROUTINE_INSTANCE_END);
 	return lines.join('\n');
+}
+
+export function separateRoutineInstanceCallouts(content: string): { content: string; changed: boolean } {
+	const lines = splitLinesWithEndings(content);
+	let startLine = -1;
+	let endLine = -1;
+	for (let index = 0; index < lines.length; index++) {
+		if (startLine < 0 && lines[index].text.includes(ROUTINE_INSTANCE_START_PREFIX)) startLine = index;
+		if (lines[index].text.includes(ROUTINE_INSTANCE_END)) {
+			endLine = index;
+			break;
+		}
+	}
+	if (startLine < 0 || endLine < 0 || endLine <= startLine) return { content, changed: false };
+
+	const next: Array<{ text: string; ending: string }> = [];
+	let sawCheck = false;
+	let changed = false;
+	for (let index = 0; index < lines.length; index++) {
+		const line = lines[index];
+		if (index > startLine && index < endLine && /^\s*>\s*\[!CHECK\]/i.test(line.text)) {
+			if (sawCheck) {
+				const previous = next[next.length - 1];
+				if (previous && /^\s*>/.test(previous.text)) {
+					next.push({ text: '', ending: line.ending || detectLineEnding(content) });
+					changed = true;
+				}
+			}
+			sawCheck = true;
+		}
+		next.push(line);
+	}
+	if (!changed) return { content, changed: false };
+	return { content: next.map((line) => line.text + line.ending).join(''), changed: true };
 }
 
 export function insertRoutineInstancesAtSlot(content: string, document: RoutineDocument, dateKey: string): { content: string; changed: boolean; error?: string } {

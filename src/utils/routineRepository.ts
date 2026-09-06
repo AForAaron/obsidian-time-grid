@@ -13,7 +13,9 @@ import {
 	insertRoutineInstancesAtSlot,
 	parseRoutineDocument,
 	replaceLegacyRoutineWithSlot,
+	ROUTINE_INSTANCE_START_PREFIX,
 	routineDocumentFromLegacy,
+	separateRoutineInstanceCallouts,
 	serializeRoutineDocument,
 } from './routineFormat';
 import { countMixedWords, WritingStatsTracker } from './writingStats';
@@ -178,16 +180,23 @@ export class RoutineRepository {
 		let suppression = 0;
 		try {
 			await this.app.vault.process(file, (content) => {
-				if (findLegacyRoutineBlocks(content).length > 0) return content;
-				const insertion = insertRoutineInstancesAtSlot(content, document, dateKey);
-				if (insertion.error) {
-					result = { ok: false, reason: 'line-mismatch-not-found', message: insertion.error };
+				let next = content;
+				if (!next.includes(ROUTINE_INSTANCE_START_PREFIX) && findLegacyRoutineBlocks(next).length > 0) {
 					return content;
 				}
-				if (!insertion.changed) return content;
-				suppression = countMixedWords(insertion.content) - countMixedWords(content);
+				if (!next.includes(ROUTINE_INSTANCE_START_PREFIX)) {
+					const insertion = insertRoutineInstancesAtSlot(next, document, dateKey);
+					if (insertion.error) {
+						result = { ok: false, reason: 'line-mismatch-not-found', message: insertion.error };
+						return content;
+					}
+					next = insertion.content;
+				}
+				next = separateRoutineInstanceCallouts(next).content;
+				if (next === content) return content;
+				suppression = countMixedWords(next) - countMixedWords(content);
 				this.writingStats.addTaskWriteSuppression(file.path, suppression);
-				return insertion.content;
+				return next;
 			});
 			return result;
 		} catch (error) {

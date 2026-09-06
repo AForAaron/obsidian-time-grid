@@ -73,11 +73,10 @@ export class TimerStopModal extends Modal {
 		});
 		if (error) errorEl.createSpan({ text: error });
 
-		const footer = this.contentEl.createDiv('tg-task-modal-footer');
-		footer.createDiv('tg-task-modal-footer-spacer');
-		this.addButton(footer, '继续计时', 'tg-task-modal-button', () => this.close());
-		this.addButton(footer, '仅停止', 'tg-task-modal-button', () => void this.submit(false));
+		const footer = this.contentEl.createDiv('tg-task-modal-footer tg-timer-stop-footer');
 		this.addButton(footer, '停止并完成', 'tg-task-modal-button is-primary', () => void this.submit(true));
+		this.addButton(footer, '仅停止', 'tg-task-modal-button', () => void this.submit(false));
+		this.addButton(footer, '继续计时', 'tg-task-modal-button', () => this.close());
 	}
 
 	private renderBlocked(snapshot: TimerSnapshot, error = ''): void {

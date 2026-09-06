@@ -37,6 +37,7 @@ import {
 	previousDateKey,
 	replaceLegacyRoutineWithSlot,
 	routineDocumentFromLegacy,
+	separateRoutineInstanceCallouts,
 	serializeRoutineDocument,
 } from '../src/utils/routineFormat';
 import { RoutineDocument } from '../src/types/routine';
@@ -659,6 +660,44 @@ test('duplicate and wrong-date routine instances remain visible but readonly', (
 	assert.match(getTaskWriteBlockReason(wrongParsed.instances.find((item) => item.itemId === 'item-medicine')!.task) ?? '', /日期/);
 });
 
+test('multiple routine groups write separate callouts and repair already merged blocks', () => {
+	const twoGroups: RoutineDocument = {
+		version: 1,
+		groups: [
+			routineDocument.groups[0],
+			{
+				id: 'group-morning',
+				title: '辰时-午时',
+				subtitle: '上午时间',
+				enabled: true,
+				order: 1,
+				items: [{
+					id: 'item-sport',
+					title: '运动',
+					enabled: true,
+					order: 0,
+					schedule: { weekdays: [1, 2, 3, 4, 5, 6, 7] },
+				}],
+			},
+		],
+	};
+	const generated = insertRoutineInstancesAtSlot('<!-- time-grid-routine-slot:start -->\n<!-- time-grid-routine-slot:end -->\n', twoGroups, '2026-08-03').content;
+	assert.match(generated, /> \[!CHECK\] :LiRotateCw: 每日流程\n> <!-- time-grid-routine-group-instance id="group-daily" -->/);
+	assert.match(generated, /\n\n> \[!CHECK\] :LiRotateCw: 辰时-午时\n/);
+	assert.equal(/\n>\n> \[!CHECK\]/.test(generated), false);
+	const parsed = parseRoutineInstances(generated, 'Daily.md', '2026-08-03', twoGroups, '#goal');
+	assert.deepEqual(parsed.groups.map((group) => group.title), ['每日流程', '辰时-午时']);
+	assert.equal(parsed.instances.length, 3);
+
+	const merged = generated.replace('\n\n> [!CHECK] :LiRotateCw: 辰时-午时\n', '\n>\n> [!CHECK] :LiRotateCw: 辰时-午时\n');
+	assert.match(merged, /\n>\n> \[!CHECK\] :LiRotateCw: 辰时-午时/);
+	const repaired = separateRoutineInstanceCallouts(merged);
+	assert.equal(repaired.changed, true);
+	assert.match(repaired.content, /\n\n> \[!CHECK\] :LiRotateCw: 辰时-午时\n/);
+	assert.equal(separateRoutineInstanceCallouts(repaired.content).changed, false);
+	assert.equal(parseRoutineInstances(repaired.content, 'Daily.md', '2026-08-03', twoGroups, '#goal').instances.length, 3);
+});
+
 test('routine calendar uses the natural previous day across month and year boundaries', () => {
 	assert.equal(previousDateKey('2026-08-01'), '2026-07-31');
 	assert.equal(previousDateKey('2026-01-01'), '2025-12-31');
@@ -682,10 +721,10 @@ test('task card style contract matches the compact Claude design', () => {
 	assert.match(badge, /border:\s*1px solid/);
 	assert.match(badge, /background:\s*transparent !important/);
 	assert.match(badge, /box-shadow:\s*none !important/);
-	assert.match(badge, /font-size:\s*10px/);
+	assert.match(badge, /font-size:\s*11px/);
 	assert.doesNotMatch(badge, /(?:^|\n)\s*(?:width|min-width|max-width):\s*[1-9]\d*px/);
 	assert.doesNotMatch(css, /\.tg-task-status-badge\.is-(?:in-progress|done|cancelled|unknown)\s*\{[^}]*background:/);
-	assert.match(css, /@media \(hover: none\), \(pointer: coarse\)[\s\S]*?\.tg-task-status-control \{[\s\S]*?min-width:\s*36px(?:\s*!important)?;[\s\S]*?min-height:\s*36px(?:\s*!important)?;/);
+	assert.match(css, /@media \(hover: none\), \(pointer: coarse\)[\s\S]*?\.tg-task-status-control \{[\s\S]*?min-width:\s*44px(?:\s*!important)?;[\s\S]*?min-height:\s*44px(?:\s*!important)?;/);
 });
 
 test('timer block insertion prefers the unique template slot and preserves CRLF BOM', () => {
@@ -792,11 +831,11 @@ test('cross-midnight close and continuation upsert are idempotent and refuse sta
 	assert.equal(stale.content, closed.content);
 });
 
-test('sundial production CSS preserves the approved Claude Design breakpoints and reduced motion', () => {
+test('sundial production CSS preserves the approved responsive breakpoints and reduced motion', () => {
 	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
 	assert.match(css, /@container tg-sundial \(max-width: 299px\)/);
 	assert.match(css, /@container tg-sundial \(min-width: 420px\)/);
-	assert.match(css, /@container tg-sundial \(min-width: 680px\)/);
+	assert.match(css, /@container tg-sundial \(min-width: 760px\)/);
 	assert.match(css, /prefers-reduced-motion: reduce/);
 	assert.match(css, /\.tg-sundial-dial-now/);
 	assert.match(css, /\.tg-timer-panel/);
@@ -807,6 +846,17 @@ test('sundial production CSS preserves the approved Claude Design breakpoints an
 	assert.match(css, /\.tg-btn-danger-quiet/);
 	assert.match(css, /\.tg-btn-quiet/);
 	assert.match(css, /\.tg-chip/);
+	// 按钮分级体系：一级导航 token 化、二级分段 .tg-segmented、三级动作 .tg-btn--* 及旧类别名层
+	assert.match(css, /--tg-btn-h:/);
+	assert.match(css, /--tg-btn-primary-bg:/);
+	assert.match(css, /\.tg-segmented/);
+	assert.match(css, /\.tg-segmented--active/);
+	assert.match(css, /\.tg-btn--primary/);
+	assert.match(css, /\.tg-btn--secondary/);
+	assert.match(css, /\.tg-btn--secondary-quiet/);
+	assert.match(css, /\.tg-btn--ghost/);
+	assert.match(css, /\.tg-btn--danger/);
+	assert.match(css, /\.tg-btn--danger-solid/);
 	assert.match(css, /\.tg-timer-live-dot/);
 	assert.match(css, /@container tgtimer/);
 	const sundialSource = readFileSync(resolve('src/components/SundialTimeView.ts'), 'utf8');
@@ -957,6 +1007,7 @@ test('stop dialog and switch checkbox contracts', () => {
 	assert.match(stopModal, /仅停止/);
 	assert.match(stopModal, /继续计时/);
 	assert.match(stopModal, /计时状态刚刚发生变化，请重新确认/);
+	assert.match(stopModal, /tg-timer-stop-footer[\s\S]*?addButton\(footer, '停止并完成'[\s\S]*?addButton\(footer, '仅停止'[\s\S]*?addButton\(footer, '继续计时'/);
 	// 两个停止入口统一走 requestStop
 	assert.match(sundial, /this\.options\.requestStop\(\)/);
 	assert.match(view, /requestStopTimer\(\)/);
@@ -1088,6 +1139,8 @@ test('task creation UI contracts', () => {
 	const writer = readFileSync(resolve('src/utils/taskWriter.ts'), 'utf8');
 	assert.match(panel, /'新建任务'/);
 	assert.match(panel, /setIcon\(create, 'plus'\)/);
+	assert.match(panel, /createDiv\('tg-task-center-actions'\)/);
+	assert.match(modal, /addClass\('tg-task-modal', 'tg-task-create-modal'\)/);
 	// 默认到期日是今天，且可清除
 	assert.match(modal, /due = getTodayKey\(\)/);
 	assert.match(modal, /'清除'/);
@@ -1109,6 +1162,67 @@ test('task timer UI has modal confirmation, live strip, cleanup and narrow layou
 	assert.match(css, /\.tg-task-timer-strip/);
 	assert.match(css, /\.modal\.tg-task-timer-modal/);
 	assert.match(css, /@container tg-task-view \(max-width: 260px\)/);
+});
+
+test('task panel shows routine groups above overdue and yesterday reminder', () => {
+	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	const areaIndex = panel.indexOf("createDiv('tg-routine-area')");
+	const loopIndex = panel.indexOf('for (const config of SECTION_CONFIG)');
+	const groupLoop = panel.indexOf('for (const group of visibleGroups)');
+	const yesterday = panel.indexOf('this.renderYesterdayReminder(parent, snapshot)');
+	assert.ok(areaIndex >= 0 && areaIndex < loopIndex, 'routine area should render before the six sections');
+	assert.ok(groupLoop >= 0 && yesterday > groupLoop, 'yesterday reminder should follow routine groups');
+	assert.match(panel, /section: 'overdue'/);
+	assert.match(css, /\.tg-routine-area \{/);
+});
+
+test('responsive UI keeps due dates visible and constrains touch overlays', () => {
+	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	const narrowStart = css.indexOf('@container tg-task-view (max-width: 320px)');
+	const narrowEnd = css.indexOf('@container tg-task-view (min-width: 521px)', narrowStart);
+	const narrow = css.slice(narrowStart, narrowEnd);
+	assert.doesNotMatch(narrow, /\.tg-task-due,\s*\n/);
+	assert.match(narrow, /\.tg-task-due \{[\s\S]*?padding-inline:\s*4px/);
+	assert.match(panel, /tg-task-inline-due/);
+	assert.match(css, /\.modal\.tg-task-timer-modal,[\s\S]*?max-height:\s*calc\(100dvh - 16px\)/);
+	assert.match(css, /\.tg-timer-stop-footer[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+	assert.match(css, /\.tg-task-menu,[\s\S]*?left:\s*8px !important;[\s\S]*?right:\s*8px/);
+	assert.match(css, /\.tg-sundial-heat-cell \{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;/);
+	assert.match(css, /button\.tg-sundial-calendar-day,[\s\S]*?button\.tg-routine-weekday \{[\s\S]*?min-width:\s*0;/);
+	assert.match(css, /\.tg-sundial-calendar-day::before,[\s\S]*?\.tg-routine-weekday::before \{[\s\S]*?width:\s*max\(44px, 100%\)/);
+});
+
+test('sticky header contract keeps both fixed zones pinned with scroll-driven separators', () => {
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	const view = readFileSync(resolve('src/views/TimeGridView.ts'), 'utf8');
+	// 任务视图头部由 relative 改为 sticky，且覆写必须在基础规则之后（同特异性按序生效）
+	const relativeHeader = css.indexOf('.tg-task-center-header {\n\tposition: relative;');
+	const stickyHeader = relativeHeader >= 0 ? css.indexOf('position: sticky;', relativeHeader) : -1;
+	assert.ok(relativeHeader >= 0, 'base relative rule should remain');
+	assert.ok(stickyHeader > relativeHeader, 'sticky override must come after the relative base rule');
+	// 停靠点与层级：让开常驻 sticky 的切换器，低于其 z-index 一级
+	assert.match(css, /top:\s*var\(--tg-view-header-h\)/);
+	assert.match(css, /z-index:\s*19;/);
+	// padding 缝隙抵消 token 与「宁可重叠不留缝」的高度核算（桌面 53px / 触屏 61px）
+	assert.match(css, /--tg-sticky-inset:\s*clamp\(8px, 2\.5cqi, 12px\)/);
+	assert.match(css, /--tg-view-header-h:\s*53px/);
+	assert.match(css, /@media \(hover: none\), \(pointer: coarse\) \{[\s\S]*?--tg-view-header-h:\s*61px/);
+	// 固定区背景必须完全不透明，禁止 backdrop-filter 穿模方案（只在 sticky 规则块内检查）
+	const stickyBlock = css.slice(stickyHeader, css.indexOf('animation-timeline', stickyHeader));
+	assert.ok(stickyBlock.length > 0 && stickyBlock.length < 6000, 'sticky block should be bounded');
+	assert.doesNotMatch(stickyBlock, /backdrop-filter/);
+	// 分隔线由滚动位置驱动（.is-scrolled），时间视图侧用 :has 限定激活 pane，并带 @supports 回退
+	assert.match(css, /\.tg-container\.is-scrolled:has\(\.tg-time-view\.is-active\) \.tg-view-header,[\s\S]*?\.tg-container\.is-scrolled \.tg-task-center-header \{/);
+	assert.match(css, /@supports not selector\(:has\(\*\)\)/);
+	// 触屏搜索框 16px 防 iOS 聚焦缩放错位
+	assert.match(css, /@media \(hover: none\), \(pointer: coarse\) \{[\s\S]*?\.tg-task-search-input \{[\s\S]*?font-size:\s*16px/);
+	// 监听挂唯一滚动容器（contentEl = .tg-container），passive，关闭时移除并清状态类
+	assert.match(view, /this\.contentEl\.addEventListener\('scroll', this\.handleContainerScroll, \{ passive: true \}\)/);
+	assert.match(view, /this\.contentEl\.removeEventListener\('scroll', this\.handleContainerScroll\)/);
+	assert.match(view, /this\.contentEl\.removeClass\('is-scrolled'\)/);
+	assert.match(view, /this\.contentEl\.toggleClass\('is-scrolled', this\.contentEl\.scrollTop > 0\)/);
 });
 
 void (async () => {

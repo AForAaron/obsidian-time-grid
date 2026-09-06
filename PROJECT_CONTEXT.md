@@ -73,11 +73,11 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - `simple-time-tracker` 时长按当前日期边界裁剪，避免跨日计时污染单日统计。
 - 新增字数统计从插件启用后建立基线，不回填历史新增字数。
 - 任务模块使用 `metadataCache.listItems` 定位任务，扫描期间异步分批；所有任务写入只经过 `TaskWriter` 和 `Vault.process()`。
-- 任务中心按逾期、今天、待分类、长期、未来、已结束六区展示；未来细分明天、7 天内和更晚，完成与取消合并为已结束并保留状态区分；异常、未知状态和循环任务仍显示并标注只读。
+- 任务中心先展示每日流程组合，再按逾期、今天、待分类、长期、未来、已结束六区展示；未来细分明天、7 天内和更晚，完成与取消合并为已结束并保留状态区分；异常、未知状态和循环任务仍显示并标注只读。任务面板分区顺序由代码固定，界面不能拖拽调换。
 - 任务搜索覆盖描述、标签和文件路径；状态、优先级、来源类别之间使用 AND，同类选项使用 OR。搜索、筛选和触屏展开仅保留在当前会话。
 - 任务菜单、筛选和完整预览统一使用 `document.body` portal 层，并在外部点击、滚动、Esc、窗口失焦时关闭；菜单行为继续调用既有任务操作接口。
 - “每日流程”使用专用 Markdown 配置笔记保存多个组合和未来计划，每篇日记保存当天真实 checklist 实例；不使用 Tasks `🔁` 语法，也不建立数据库。
-- 历史新旧格式流程实例均从普通任务索引排除；昨天未完成项目只作为只读提醒，不进入逾期，今天仅在日记创建后生成全新实例。
+- 历史新旧格式流程实例均从普通任务索引排除；昨天未完成项目只作为只读提醒，显示在每日流程组合下方、逾期区上方，不进入逾期任务列表；今天仅在日记创建后生成全新实例。多个流程组合写入日记时必须用空行分隔各自的 `[!CHECK]` callout，否则 Obsidian 会把它们合成一块。
 - 配置与今天实例分开编辑；修改未来默认不改今天，可显式选择同时应用。跳过今天写取消状态并保留日记原文，既有日记不会因定义删除或停用而追溯改变。
 - 旧模板迁移必须先显示预览并由用户确认，随后备份模板、创建配置笔记并替换生成槽位；真实 vault 的验证不得自动点击确认迁移。
 - 写入前要求目标原文在文件中全局唯一；找不到、重复、循环、异常和未知状态任务拒绝写入并重新索引。
@@ -85,6 +85,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 使用现有 Node、TypeScript 和 esbuild 测试脚本；修改后至少运行 `npm test` 与 `npm run build`。
 - 根目录 `main.js` 和 `styles.css` 是构建/发布产物，受 `.gitignore` 忽略；生产构建会把 `src/styles/main.css` 同步为根目录 `styles.css`，之后用 `install.sh` 安装到实际 Obsidian vault 的 `.obsidian/plugins/time-grid/`。
 - 安装到 Obsidian 后，需要关闭/开启 Time Grid 插件、执行 Reload app without saving，或重启 Obsidian 才能加载新的 JS/CSS。
+- **Vault 目标路径可配置、不写死**：`npm run deploy` = `npm run build && ./install.sh`。无参时 vault 解析顺序为 `TIMEGRID_VAULT` → 项目根 `.timegrid-vault`（gitignore，示例见 `.timegrid-vault.example`）→ `obsidian.json` 中 open 的 vault；多个候选时脚本列出并退出。目标必须是 vault **根目录**（含 `.obsidian/`），不是 `00-Templates` 等笔记子文件夹。
 
 ## 当前进度
 
@@ -104,6 +105,7 @@ Time Grid 是一个 Obsidian 插件，用于在右侧面板展示极简时间管
 - 任务模块 Phase 4 已完成：支持删除二次确认、顺延一天、Shift 顺延一周，以及待分类“设为今天/设为长期”；无到期日不显示顺延。
 - 任务中心 UI 重设计已完成：顶部双视图切换、最后视图持久化、四统计卡、即时搜索、状态/优先级/来源组合筛选、过滤计数、未来三组、已结束合并、桌面完整浮层、触屏行内展开，以及统一 portal 状态菜单、更多菜单和筛选浮层均已接入。
 - 响应式样式使用任务视图容器查询，覆盖 `≤320px`、`321–520px`、`>520px`；极窄侧栏固定 2×2 统计与收口筛选，不再常驻编辑、顺延、删除按钮，深色与浅色均使用 Obsidian 主题变量和 `color-mix`。
+- 按钮分级体系（真相源：main.css Design System 3 区块顶部注释）：全站选中语言唯一——紫色 = 选中，层级越高紫色强度越重。一级主导航 `.tg-view-switcher-button` 选中 = accent 1.5px 边 + 17% 淡紫填充（`--tg-nav-active-bg` / `--tg-nav-active-border`，已弃用凹陷/凸起按压隐喻）；二级分段/筛选单选 `.tg-segmented` / `.tg-segmented--active` accent 边 + 13% 填充胶囊（tg-chip、日晷范围、流程星期、筛选选项均按同一 token 收敛）；三级动作 `.tg-btn--primary`（accent 实心 + `--tg-btn-primary-shadow` 轻投影，唯一 CTA）/ `--secondary`（常驻描边）/ `--secondary-quiet`（淡底）/ `--ghost`（透明图标钮）/ `--danger`（常驻红描边）/ `--danger-solid`（危险实心），语义色与分级正交。旧类名（`tg-btn-primary/neutral/danger-quiet/quiet`、`tg-task-modal-button.is-*`、`tg-task-button-*` 等）保留为别名指向新样式；新代码一律用分级类，例外必须注释（如 `.tg-routine-manager-icon.is-danger` 的实底红特例）。触屏 44px 热区约定继续生效。
 - 已加入基于现有 esbuild/Node 的 `npm test`，当前覆盖 72 个核心用例及独立临时 Git vault 集成验证；除原有任务、每日流程和计时数据边界外，已覆盖任务计时资格、Markdown 标题清理、切换竞态、计时失败不改状态、状态回写部分成功、只读任务和计时条资源清理。
 - 2026-09-03 发布首个 GitHub Release `v0.2.0`（<https://github.com/AForAaron/time-grid-obsidian/releases/tag/v0.2.0>），附件为 `main.js`、`manifest.json`、`styles.css`；`versions.json` 已补齐。CI 产出的三个文件与本地构建、两个 vault 安装目录 SHA-256 完全一致，构建可复现。
 - 2026-09-03 起版本为 `0.3.0`：新增停止计时询问是否完成、切换时可顺带完成上一个任务、以及插件内新建任务到专用收件箱。
@@ -139,13 +141,13 @@ npm install
 npm run build
 npm run dev
 
-# 如果当前 shell 没有 npm，可使用 Codex bundled Node 做等价验证/构建
-/Users/aaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -noEmit -skipLibCheck
-/Users/aaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node esbuild.config.mjs production
+# 一键构建并安装（agent 改完源码后应自动执行）
+npm run deploy
 
-# 同步到实际 Obsidian vault
-bash install.sh "/Users/aaron/Library/CloudStorage/GoogleDrive-aaron0493846645@gmail.com/My Drive/Obsidin/Aaron_Ob"
-bash install.sh "/Users/aaron/Documents/Obsidian Vault"
+# 指定 vault（任选其一）
+echo '/path/to/vault' > .timegrid-vault   # 本地配置，不提交；可参考 .timegrid-vault.example
+TIMEGRID_VAULT="/path/to/vault" npm run deploy
+./install.sh "/path/to/vault"
 ```
 
 ## 变更记录
@@ -311,3 +313,35 @@ bash install.sh "/Users/aaron/Documents/Obsidian Vault"
 - 涉及文件：`src/utils/taskTimer.ts`、`src/utils/timerController.ts`、`src/utils/timerFormat.ts`、`src/utils/taskInbox.ts`、`src/utils/taskWriter.ts`、`src/utils/vaultPaths.ts`、`src/utils/routineRepository.ts`、`src/utils/writingStats.ts`、`src/types/timer.ts`、`src/types/task.ts`、`src/components/TimerStopModal.ts`、`src/components/TaskCreateModal.ts`、`src/components/TaskTimerModal.ts`、`src/components/TaskPanel.ts`、`src/components/SundialTimeView.ts`、`src/views/TimeGridView.ts`、`src/main.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`tests/taskInboxVault.integration.ts`、`tests/obsidianStub.ts`、`scripts/run-task-inbox-vault-tests.mjs`、`package.json`、`manifest.json`、`versions.json`、`README.md`
 - 验证方式：`npm test` 通过 89 项核心用例（新增 17 项，覆盖关联解析的 0/1/多条分支、可完成性判定、计时身份指纹、停止的四种结果、切换时旧任务写入失败仍不阻塞新计时、新任务序列化、插槽 0/1/多个、撞车补 ID、路径归一化）、每日流程临时 Git vault 24 次写入、计时器 9 次写入，以及新增的收件箱临时 Git vault 7 次写入（含新建任务后立即被既有严格写入路径改写、撞 ID 的两条仍可各自唯一定位、插槽外的手写内容原样保留、CRLF 保持、插槽复制时拒写且原文一字不动）。`npm run build`、`git diff --check` 通过。最终构建已安装到 Aaron_Ob 与 Documents Obsidian Vault，三处文件 SHA-256 一致。
 - 后续注意事项：**真实 vault 的 UI 冒烟测试尚未完成**。Aaron_Ob 窗口不是 Obsidian 的焦点窗口，`View > Force Reload` 始终作用在另一个 vault 窗口上，后台控制无法切换焦点窗口，请求全屏控制授权也未获应答，因此该窗口仍在运行 0.2.0 代码（已通过「切换视图触发保存后 `data.json` 中仍无 `inboxPath`」确认，不是功能缺陷）。整个过程中今日日记 SHA-256 未变、未创建收件箱文件、`timerRecovery` 保持为空、面板视图已还原。用户需手动点选 Aaron_Ob 窗口后重载插件，再验证「+」新建任务与停止计时弹窗。
+
+### 2026-09-04（三端响应式 UI 审计与改进）
+
+- 修改等级：L2 展示层与可访问交互改进；任务、计时、日记、流程的数据结构和写入语义均未改变。
+- 变更摘要：以 `origin/main` 的 0.3.0（`d5472f4`）为基线建立 `codex/responsive-ui-audit`。任务标题和右侧操作拆成可收缩标题区与 `.tg-task-center-actions` 固定操作组；320px 侧栏不再隐藏到期信息，触屏展开补充完整日期。粗指针环境下任务、筛选、菜单、日期快捷项、计时和弹窗操作统一为至少 44×44px，桌面精确指针仍保持紧凑密度。手机菜单/筛选改为带 8px 视口安全边距的可滚动底部面板；任务弹窗使用 `100dvh` 高度上限、内部滚动、安全区内边距和 sticky footer。停止弹窗的 DOM、视觉和键盘顺序统一为「停止并完成 / 仅停止 / 继续计时」，主操作在手机端全宽。日晷双栏阈值从 680px 提高到 760px；热力图保留受控横向滚动，并以 44px 命中区承载紧凑视觉点；关键说明和操作文案字号分别不低于 11px/12px。
+- 涉及文件：`src/components/TaskPanel.ts`、`src/components/TaskCreateModal.ts`、`src/components/TimerStopModal.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`UI_RESPONSIVE_AUDIT.md`、`PROJECT_CONTEXT.md`。
+- 验证方式：`npm test` 通过 90 项核心用例、每日流程临时 Git Vault 24 次写入、计时器临时 Git Vault 9 次写入和收件箱临时 Git Vault 7 次写入；`npm run build`、`git diff --check` 通过。Obsidian 1.12.7 的一次性 QA Vault 实际加载生产时间页，在约 280px 桌面侧栏未见页面级横向溢出；全程未在真实 Vault 触发任务或计时写入。
+- 审计边界：本地浏览器安全策略拒绝加载 `file:` QA 页面，沙箱也不能建立本地 HTTP 服务，未生成逐视口修改前后截图联系表。临时 QA Vault 的 `excludedPaths` 曾被夹具写成数组，修正为字符串后需要强制重载；用户取消了该操作，因此没有完成原生任务大列表和全部弹窗状态的最终冒烟。手机、平板、125% 缩放、粗指针和软键盘场景目前只有生产源码、容器断点和自动化契约证据，**不能表述为 iPhone/iPad 真机验收通过**。完整发现、验证矩阵及剩余视觉 P2 见 `UI_RESPONSIVE_AUDIT.md`。
+
+### 2026-09-05（任务面板顺序与日记 Routine callout）
+
+- 修改等级：L1 局部修补
+- 变更摘要：任务中心区块顺序由代码固定，界面不能拖拽。已把每日流程组合提到面板最上方，昨日漏做紧随其后，再是逾期/今天等六区，避免任务视图被逾期列表挡住流程。日记实例写入改为用空行分隔各组合的 `[!CHECK]` callout；已写入的实例区会在下次确保实例时只插入空行、不改任务正文。
+- 涉及文件：`src/components/TaskPanel.ts`、`src/utils/routineFormat.ts`、`src/utils/routineRepository.ts`、`src/styles/main.css`、`tests/taskCore.test.ts`、`PROJECT_CONTEXT.md`
+- 验证方式：`npm test`；未做 Obsidian 浏览器验证。
+- 后续注意事项：重载插件后今日日记会自动把已粘连的 callout 拆开；任务、完成状态和隐藏标记保持不变。组合之间的相对顺序仍只能在「管理每日流程」里用上下箭头调整。
+
+### 2026-09-05（deploy 流程：固化操作、路径可配）
+
+- 修改等级：L1 构建/部署流程
+- 变更摘要：`npm run deploy` 不再 hardcode Aaron_Ob 路径。`install.sh` 无参时按 `TIMEGRID_VAULT` → `.timegrid-vault` → `obsidian.json` open vault 解析目标；多 vault 时列出候选并退出。新增 `.timegrid-vault.example`，`.timegrid-vault` 加入 gitignore。Cursor 规则同步为「改 src 后必须 build + install + 提醒 Reload」。
+- 涉及文件：`install.sh`、`package.json`、`.gitignore`、`.timegrid-vault.example`、`.cursor/rules/timegrid-deploy.mdc`、`PROJECT_CONTEXT.md`
+- 验证方式：`bash -n install.sh`；`npm run deploy` 安装到 Aaron_Ob vault 根；确认 `Aaron_Ob/.obsidian/plugins/time-grid/main.js` 含 `tg-routine-area`，`00-Templates` 下无插件目录。
+- 后续注意事项：换 vault 只需改本地 `.timegrid-vault` 或设 `TIMEGRID_VAULT`；vault 根是含 `.obsidian/` 的目录，不是笔记子文件夹。
+
+### 2026-09-05（全插件按钮分级统一）
+
+- 修改等级：L2 展示层统一样式；不改任何功能逻辑与点击行为。
+- 变更摘要：把全插件按钮收敛为三级分级体系（一级主导航卡片凸起式 / 二级分段选择 accent 胶囊 / 三级动作按钮 primary-secondary-ghost），语义色（danger 红）与分级正交，只换颜色不换形状。main.css 的 Design System 3 区块建立统一按钮 token（`--tg-btn-h`、`--tg-btn-primary-bg`、`--tg-btn-danger` 等，作用域为 `.tg-container` 与四个任务弹窗）与新类 `.tg-segmented` / `.tg-segmented--active`、`.tg-btn--primary` / `--secondary` / `--secondary-quiet` / `--ghost` / `--danger` / `--danger-solid`；旧类名全部保留为别名指向新样式（`tg-btn-primary/neutral/danger-quiet/quiet`、`tg-task-modal-button.is-*`、`tg-task-button-*`、`tg-routine-manager-*`、`tg-task-icon-button`、`tg-task-search-clear`、`tg-task-more-button`、`tg-task-row-action`、`tg-routine-group-menu`、计时条、流程卡/提醒条、筛选与空态按钮、`tg-chip`、日晷范围）。一级导航 `.tg-view-switcher-button` 视觉不变、仅 token 化。二级收敛：日晷「3个月/6个月/1年」在 TS 挂 `tg-segmented` 类并把 `is-active` 换为 `tg-segmented--active`；计时建议芯片 `tg-chip` 与分段 token 合并；流程星期与筛选/选项按钮统一为透明底细边 + accent 选中/13% 填充语言。一处例外：`.tg-routine-manager-icon.is-danger` 维持实底淡红（30px 行内图标用描边红可读性差），已在 CSS 注释留档。触屏 44px 热区规则扩展到 `.tg-segmented`。
+- 涉及文件：`src/styles/main.css`、`src/components/SundialTimeView.ts`（仅 className）、`tests/taskCore.test.ts`（断言追加分级类，未删测试）、`PROJECT_CONTEXT.md`
+- 验证方式：CSS 括号平衡检查通过；`npm test` 通过 92 项核心用例与三组临时 Git vault 写入（24 routine / 9 timer / 7 inbox）；`npm run deploy` 成功安装到 Aaron_Ob vault。
+- 后续注意事项：旧类名仅作回归过渡别名，新按钮一律直接用分级类；在 Obsidian 中 Reload 插件后生效。

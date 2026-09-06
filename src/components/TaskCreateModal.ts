@@ -21,7 +21,7 @@ export class TaskCreateModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.modalEl.addClass('tg-task-modal');
+		this.modalEl.addClass('tg-task-modal', 'tg-task-create-modal');
 		this.render();
 	}
 

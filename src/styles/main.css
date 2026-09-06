@@ -102,6 +102,7 @@
 	background: var(--tg-surface-sunken);
 }
 
+/* 一级 · 主导航：选中 = accent 边 + 淡紫填充（与二级分段同一「紫色 = 选中」语言，仅填充更重；不再用凹陷/凸起按压隐喻） */
 .tg-view-switcher-button {
 	appearance: none;
 	display: inline-flex;
@@ -109,27 +110,28 @@
 	justify-content: center;
 	gap: 6px;
 	min-width: 0;
-	height: 36px;
+	height: var(--tg-nav-h, 36px);
 	margin: 0;
 	padding: 0 12px;
-	border: 0;
-	border-radius: 6px;
+	border: 1.5px solid transparent;
+	border-radius: var(--tg-nav-radius, 6px);
 	background: transparent;
 	box-shadow: none;
 	color: var(--tg-muted);
-	font-size: 12px;
+	font-size: var(--tg-btn-font, 12px);
 	font-weight: 600;
 	cursor: pointer;
-	transition: background-color var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, box-shadow var(--tg-duration-fast) ease;
+	transition: background-color var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, border-color var(--tg-duration-fast) ease, box-shadow var(--tg-duration-fast) ease;
 }
 
-.tg-view-switcher-button:hover {
+.tg-view-switcher-button:hover:not(.is-active) {
+	background: var(--tg-surface-hover);
 	color: var(--tg-text);
 }
 
 .tg-view-switcher-button.is-active {
-	background: var(--tg-panel-bg);
-	box-shadow: 0 1px 2px color-mix(in srgb, var(--background-modifier-box-shadow) 24%, transparent);
+	border-color: var(--tg-nav-active-border, var(--tg-accent, var(--interactive-accent)));
+	background: var(--tg-nav-active-bg, color-mix(in srgb, var(--tg-accent, var(--interactive-accent)) 17%, transparent));
 	color: var(--tg-text);
 }
 
@@ -937,6 +939,85 @@
 	margin-bottom: 15px;
 }
 
+/* ── Sticky 固定区增量（Claude Code sticky header 方案整合） ────────────────
+   时间视图 .tg-view-header 已 sticky（保持 top:0/z-index:20 语义，仅修复 padding 缝隙）；
+   任务视图 .tg-task-center-header 由 relative 改 sticky，固定到筛选按钮为止，
+   .tg-task-timer-strip 及以下仍为滚动内容。唯一滚动容器是 .tg-container
+   （padding: clamp(8px, 2.5cqi, 12px)）。sticky 的停靠基准是 scrollport 顶边，
+   top:0 只能停到 content box 顶，中间那条 padding 带是内容可穿过的缝；
+   以下用「top:-inset + padding-top:inset + margin-top:-inset」三件套把停靠点
+   上提到可视区顶边、视觉内容位置不变（Chromium 实测：盒顶与可视区顶对齐，无横向溢出）。
+   分隔线由 .is-scrolled（JS 挂在 .tg-container，passive listener，TimeGridView 注册/卸载）驱动。 */
+.tg-container {
+	/* 与 .tg-container 自身 padding 同值，供固定区抵消用 */
+	--tg-sticky-inset: clamp(8px, 2.5cqi, 12px);
+	/* .tg-view-header 盒高核算（不含本规则补的 padding-top，背景延伸到 padding-bottom 所以计入）：
+	   .tg-view-switcher padding 3px×2 + border 1px×2 = 8px；
+	   .tg-view-switcher-button height var(--tg-nav-h, 36px) = 36px（桌面）；
+	   .tg-view-header padding-bottom 10px。合计 8+36+10 = 54px，这里写 53px：
+	   任务头部停靠点与切换器可视底边重叠 1px——宁可重叠（那一行被 z-index 更高的切换器压住），
+	   不可留缝（会漏内容）。触屏块把切换器按钮撑到 44px，盒高 52+10 = 62px，下方媒体查询里同步覆写为 61px。 */
+	--tg-view-header-h: 53px;
+}
+
+.tg-view-header,
+.tg-task-center-header {
+	/* 负 margin-inline + 等量 padding-inline：背景横向铺满 scrollport，不留透明缝，
+	   也挡住带负 margin 的子元素（如 .tg-task-row::before 的 left:-1px） */
+	margin-inline: calc(-1 * var(--tg-sticky-inset));
+	padding-inline: var(--tg-sticky-inset);
+	/* 硬性要求：完全不透明，与滚动容器同底色，禁止半透明 + backdrop-filter */
+	background: var(--tg-bg);
+	/* 分隔线用 box-shadow 第一层 0 1px 0：不参与布局（不会先占一条透明边框），
+	   也不怕主题或第三方样式用 border-color: currentColor 重置抢色。
+	   不加 transition：分隔线必须在滚动那一刻就在位；过渡依赖帧推进，
+	   面板所在窗口不在前台时会冻在起始值（完全透明） */
+	box-shadow: none;
+}
+
+.tg-view-header {
+	/* 顶部同套手法：top:-inset 上提停靠点，padding-top:inset 把切换器视觉顶回原位，
+	   margin-top:-inset 抵消新增 padding，流内高度不变、下方内容不位移 */
+	top: calc(-1 * var(--tg-sticky-inset));
+	padding-top: var(--tg-sticky-inset);
+	margin-top: calc(-1 * var(--tg-sticky-inset));
+}
+
+.tg-task-center-header {
+	/* 覆写上方基础规则的 relative */
+	position: sticky;
+	/* 停靠点让开常驻 sticky 的切换器（两个视图共用、是 .tg-container 直接子节点）：
+	   top 相对 .tg-container 的 content box 解析，≤ 盒高即与切换器重叠 1px 不留缝 */
+	top: var(--tg-view-header-h);
+	/* 低于切换器一级：极端情况（自定义主题放大字号）由切换器压住头部 */
+	z-index: 19;
+	/* 固定区内不允许出现内部滚动 */
+	overflow: visible;
+	/* 顶部补一点内边距，接住上方切换器落下的边界 */
+	padding-top: 2px;
+}
+
+/* 滚动分隔线（滚动位置 > 0 才出现，由 .is-scrolled 驱动，与 hover 无关）。
+   只出现在「当前视图最下面的固定区」底部：任务视图 → 任务头部；
+   时间视图 → 切换器（:has 判断激活 pane）。投影强度与 --tg-shadow-menu 一致。 */
+.tg-container.is-scrolled:has(.tg-time-view.is-active) .tg-view-header,
+.tg-container.is-scrolled .tg-task-center-header {
+	box-shadow: 0 1px 0 var(--tg-border-default),
+		0 4px 16px color-mix(in srgb, var(--background-modifier-box-shadow) 30%, transparent);
+}
+
+/* :has() 不可用时的回退：两个固定区都显示分隔线（仅任务视图切换器下多一条线，视觉仍成立） */
+@supports not selector(:has(*)) {
+	.tg-container.is-scrolled .tg-view-header,
+	.tg-container.is-scrolled .tg-task-center-header {
+		box-shadow: 0 1px 0 var(--tg-border-default),
+			0 4px 16px color-mix(in srgb, var(--background-modifier-box-shadow) 30%, transparent);
+	}
+}
+
+/* 不用 animation-timeline: scroll() 的纯 CSS 方案：在 sticky 元素上时间线会被解析为
+   inactive 并把元素钉死在 from 帧，反压死 .is-scrolled 路径。分隔线只走 .is-scrolled。 */
+
 .tg-task-timer-strip {
 	display: grid;
 	grid-template-columns: 10px minmax(0, 1fr) auto auto;
@@ -1011,35 +1092,12 @@
 	color: var(--tg-text);
 }
 
+/* 计时条按钮（三级 · 次操作描边）：外观由下方 Design System 3 别名层统一提供。 */
 .tg-task-timer-strip-stop,
 .tg-task-timer-strip-open {
-	appearance: none;
 	min-height: 30px;
-	margin: 0;
 	padding: 4px 9px;
-	border: 1px solid var(--tg-task-soft-border);
-	border-radius: 7px;
-	background: transparent;
-	box-shadow: none;
-	color: var(--text-muted);
-	font: inherit;
-	font-size: 10.5px;
-	cursor: pointer;
-}
-
-.tg-task-timer-strip-stop:hover,
-.tg-task-timer-strip-stop:focus-visible,
-.tg-task-timer-strip-open:hover,
-.tg-task-timer-strip-open:focus-visible {
-	border-color: color-mix(in srgb, var(--interactive-accent) 48%, var(--tg-task-soft-border));
-	background: var(--background-modifier-hover);
-	color: var(--tg-text);
-}
-
-.tg-task-timer-strip-stop:focus-visible,
-.tg-task-timer-strip-open:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--interactive-accent) 72%, transparent);
-	outline-offset: 1px;
+	font-size: 12px;
 }
 
 .tg-task-timer-strip-stop:disabled {
@@ -1053,6 +1111,17 @@
 	justify-content: space-between;
 	gap: 10px;
 	padding: 3px 2px 12px;
+}
+
+.tg-task-center-title-box {
+	min-width: 0;
+}
+
+.tg-task-center-actions {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: 4px;
 }
 
 .tg-task-center-title {
@@ -1072,50 +1141,15 @@
 }
 
 .tg-task-icon-button,
-.tg-task-search-clear,
-.tg-task-more-button,
-.tg-task-row-action {
-	appearance: none;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	margin: 0;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	box-shadow: none;
-	color: var(--tg-muted);
-	cursor: pointer;
-	font: inherit;
-}
+/* 图标按钮（三级 · ghost）统一由 Design System 3 的 .tg-btn--ghost 别名层提供外观。 */
 
 .tg-task-panel button {
 	appearance: none !important;
 	font-family: inherit;
 }
 
-.tg-task-icon-button {
-	width: 30px;
-	height: 30px;
-	border-radius: var(--tg-task-radius-sm);
-}
+/* ghost 图标几何尺寸统一由 Design System 3 别名层提供。 */
 
-.tg-task-icon-button:hover,
-.tg-task-icon-button:focus-visible,
-.tg-task-search-clear:hover,
-.tg-task-search-clear:focus-visible,
-.tg-task-more-button:hover,
-.tg-task-more-button:focus-visible,
-.tg-task-row-action:hover,
-.tg-task-row-action:focus-visible {
-	background: var(--background-modifier-hover);
-	color: var(--tg-text);
-}
-
-.tg-task-icon-button:focus-visible,
-.tg-task-search-clear:focus-visible,
-.tg-task-more-button:focus-visible,
-.tg-task-row-action:focus-visible,
 .tg-task-description:focus-visible,
 .tg-task-status-control:focus-visible,
 .tg-task-section-heading:focus-visible,
@@ -1126,12 +1160,7 @@
 	outline-offset: 1px;
 }
 
-.tg-task-icon-button svg,
-.tg-task-more-button svg,
-.tg-task-row-action svg {
-	width: 15px;
-	height: 15px;
-}
+/* ghost 图标尺寸统一由别名层提供。 */
 
 .tg-task-icon-button.is-spinning svg {
 	animation: tg-task-spin 900ms linear infinite;
@@ -1209,7 +1238,7 @@
 
 .tg-task-stat-label {
 	margin-top: 2px;
-	font-size: 9.5px;
+	font-size: 11px;
 	line-height: 1.2;
 	color: var(--tg-muted);
 }
@@ -1251,7 +1280,7 @@
 	background: var(--tg-task-card);
 	box-shadow: none;
 	color: var(--tg-text);
-	font-size: 11.5px;
+	font-size: 12px;
 }
 
 .tg-task-search-input:focus {
@@ -1262,9 +1291,6 @@
 .tg-task-search-clear {
 	position: absolute;
 	right: 5px;
-	width: 27px;
-	height: 27px;
-	border-radius: 6px;
 }
 
 .tg-task-search-clear svg {
@@ -1286,16 +1312,17 @@
 }
 
 .tg-task-filter-button,
+/* 分段/选项按钮统一并入二级 accent 语言（对齐 .tg-segmented token）；此处保留各控件的行/方角形态。 */
 .tg-task-filter-reset,
 .tg-task-filter-choice,
 .tg-task-source-option,
 .tg-task-filter-footer button,
 .tg-task-empty button {
 	appearance: none;
-	border: 1px solid var(--tg-task-soft-border);
-	background: color-mix(in srgb, var(--background-primary) 88%, var(--background-secondary));
+	border: 1px solid var(--tg-border-default);
+	background: transparent;
 	box-shadow: none;
-	color: var(--tg-muted);
+	color: var(--tg-text-muted);
 	cursor: pointer;
 }
 
@@ -1309,7 +1336,7 @@
 	margin: 0;
 	padding: 0 8px;
 	border-radius: var(--tg-radius-md);
-	font-size: 10.5px;
+	font-size: 12px;
 }
 
 .tg-task-filter-button:hover,
@@ -1318,9 +1345,9 @@
 .tg-task-filter-choice.is-selected,
 .tg-task-source-option:hover,
 .tg-task-source-option.is-selected {
-	border-color: color-mix(in srgb, var(--interactive-accent) 42%, var(--tg-task-soft-border));
-	background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
-	color: var(--text-accent);
+	border-color: var(--tg-accent);
+	background: color-mix(in srgb, var(--tg-accent) 13%, transparent);
+	color: var(--tg-text-primary);
 }
 
 .tg-task-filter-icon,
@@ -1343,13 +1370,22 @@
 	font-weight: 700;
 }
 
+/* 清除/空态按钮（三级 · 淡底次操作） */
 .tg-task-filter-reset {
 	min-width: max-content;
 	height: 28px;
 	padding: 0 6px;
 	border-color: transparent;
 	background: transparent;
-	font-size: 10px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--tg-text-muted);
+}
+
+.tg-task-filter-reset:hover:not(:disabled),
+.tg-task-filter-reset:focus-visible {
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+	color: var(--tg-text-primary);
 }
 
 .tg-task-filter-panel {
@@ -1371,7 +1407,7 @@
 
 .tg-task-filter-group-title {
 	margin-bottom: 6px;
-	font-size: 10px;
+	font-size: 11px;
 	font-weight: 650;
 	color: var(--tg-muted);
 }
@@ -1387,7 +1423,7 @@
 	margin: 0;
 	padding: 4px 8px;
 	border-radius: 7px;
-	font-size: 10px;
+	font-size: 12px;
 }
 
 .tg-task-source-list {
@@ -1410,7 +1446,7 @@
 	border-color: transparent;
 	border-radius: 6px;
 	background: transparent;
-	font-size: 10px;
+	font-size: 12px;
 	text-align: left;
 }
 
@@ -1439,13 +1475,23 @@
 	color: var(--text-faint);
 }
 
+/* 空态/面板脚注按钮（三级 · 主操作/次操作） */
 .tg-task-filter-footer button,
 .tg-task-empty button {
 	min-height: 30px;
 	padding: 4px 10px;
-	border-radius: 7px;
+	border-radius: var(--tg-btn-radius-sm, 7px);
 	color: var(--text-accent);
-	font-size: 10px;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.tg-task-filter-footer button:hover:not(:disabled),
+.tg-task-filter-footer button:focus-visible,
+.tg-task-empty button:hover:not(:disabled),
+.tg-task-empty button:focus-visible {
+	background: color-mix(in srgb, var(--tg-accent) 13%, transparent);
+	border-color: var(--tg-accent);
 }
 
 .tg-task-empty {
@@ -1535,6 +1581,13 @@
 
 .tg-task-section + .tg-task-section {
 	margin-top: 9px;
+}
+
+.tg-routine-area {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	margin-bottom: 9px;
 }
 
 .tg-task-section-heading {
@@ -1809,20 +1862,14 @@
 	text-decoration-color: var(--text-faint);
 }
 
-.tg-task-more-button {
-	width: 26px;
-	height: 26px;
-	border-radius: 6px;
-}
-
-.tg-task-meta {
+/* 任务卡行内操作按钮：ghost 行为由别名层提供，此处仅保留几何尺寸。 */.tg-task-meta {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 6px;
 	min-width: 0;
 	margin-top: 6px;
-	font-size: 10px;
+	font-size: 11px;
 	line-height: 1.3;
 	font-variant-numeric: tabular-nums;
 	color: var(--tg-muted);
@@ -1901,7 +1948,7 @@
 	background: transparent !important;
 	box-shadow: none !important;
 	color: var(--tg-muted);
-	font-size: 10px;
+	font-size: 11px;
 	font-weight: 600;
 	line-height: 1.2;
 	white-space: nowrap;
@@ -1951,11 +1998,7 @@
 	transition: opacity 120ms ease, transform 120ms ease;
 }
 
-.tg-task-row-action {
-	width: 25px;
-	height: 25px;
-	border-radius: 6px;
-}
+/* 任务卡行内 ghost 尺寸统一由别名层提供。 */
 
 @media (hover: hover) and (pointer: fine) {
 	.tg-task-description {
@@ -1985,18 +2028,25 @@
 }
 
 .tg-task-inline-source,
+.tg-task-inline-due,
 .tg-task-inline-diagnostic {
 	margin-top: 5px;
-	font-size: 9.5px;
+	font-size: 11px;
 	line-height: 1.4;
 	color: var(--text-faint);
 	word-break: break-all;
+}
+
+.tg-task-inline-due {
+	color: var(--tg-muted);
+	font-variant-numeric: tabular-nums;
 }
 
 .tg-task-inline-diagnostic {
 	color: var(--text-error);
 }
 
+/* 任务卡「再显示 N 条」（三级 · 淡底次操作） */
 .tg-task-more {
 	appearance: none;
 	width: 100%;
@@ -2013,7 +2063,7 @@
 
 .tg-task-more:hover,
 .tg-task-more:focus-visible {
-	background: var(--background-modifier-hover);
+	background: color-mix(in srgb, var(--tg-accent) 13%, transparent);
 }
 
 .tg-task-preview {
@@ -2211,18 +2261,12 @@
 	gap: 2px;
 }
 
+/* 流程卡片/消息条按钮统一并入分级按钮（三级 · 次操作/主操作）。 */
 .tg-routine-group-menu,
 .tg-routine-manage-button,
 .tg-routine-message > button,
 .tg-routine-yesterday > button {
-	appearance: none;
-	border: 1px solid var(--tg-task-soft-border);
 	border-radius: var(--tg-task-radius-sm);
-	background: color-mix(in srgb, var(--tg-task-card) 88%, transparent);
-	box-shadow: none;
-	color: var(--tg-muted);
-	font: inherit;
-	cursor: pointer;
 }
 
 .tg-routine-group-menu {
@@ -2237,19 +2281,6 @@
 .tg-routine-group-menu svg {
 	width: 14px;
 	height: 14px;
-}
-
-.tg-routine-group-menu:hover,
-.tg-routine-group-menu:focus-visible,
-.tg-routine-manage-button:hover,
-.tg-routine-manage-button:focus-visible,
-.tg-routine-message > button:hover,
-.tg-routine-message > button:focus-visible,
-.tg-routine-yesterday > button:hover,
-.tg-routine-yesterday > button:focus-visible {
-	border-color: color-mix(in srgb, var(--interactive-accent) 48%, var(--tg-task-soft-border));
-	background: var(--background-modifier-hover);
-	color: var(--tg-text);
 }
 
 .tg-routine-message,
@@ -2330,7 +2361,7 @@
 .tg-routine-manage-button {
 	min-height: 30px;
 	padding: 5px 9px;
-	font-size: 10px;
+	font-size: 12px;
 	white-space: nowrap;
 }
 
@@ -2462,7 +2493,13 @@
 	color: var(--text-error);
 }
 
+/* sticky 固定区在既有断点两端的自身间距，保证跨断点时固定区高度变化不产生跳动
+   （统计卡 2/4 列切换、极窄 padding 收紧仍由上方既有规则处理，不在此重复） */
 @container tg-task-view (max-width: 320px) {
+	.tg-task-center-header {
+		padding-top: 1px;
+	}
+
 	.tg-task-center-heading {
 		padding-inline: 1px;
 	}
@@ -2514,11 +2551,14 @@
 		padding-right: 0;
 	}
 
-	.tg-task-due,
 	.tg-task-priority,
 	.tg-task-file,
 	.tg-task-hover-actions {
 		display: none;
+	}
+
+	.tg-task-due {
+		padding-inline: 4px;
 	}
 
 	.tg-task-meta {
@@ -2541,6 +2581,10 @@
 @container tg-task-view (min-width: 521px) {
 	.tg-task-panel {
 		padding-bottom: 24px;
+	}
+
+	.tg-task-center-header {
+		padding-top: 3px;
 	}
 
 	.tg-task-stats {
@@ -2593,10 +2637,121 @@
 }
 
 @media (hover: none), (pointer: coarse) {
+	.tg-container button {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	/* 触屏下切换器按钮被上方规则撑到 44×44（桌面 36px），切换器盒高 52px，
+	   加 .tg-view-header padding-bottom 10px，可视固定区 62px；
+	   任务头部停靠点同步改为 52+10−1 = 61px（仍重叠 1px 防漏内容） */
+	.tg-container {
+		--tg-view-header-h: 61px;
+	}
+	/* iOS Safari：输入框字号 < 16px 时聚焦会自动放大视口，放大后 sticky 会错位。
+	   只在触屏提高搜索框字号，桌面保持 12px 不变 */
+	.tg-task-search-input {
+		font-size: 16px;
+	}
+
+	.tg-view-switcher-button,
+	.tg-task-icon-button,
+	.tg-task-search-clear,
+	.tg-task-checkbox,
+	.tg-task-more-button,
+	.tg-task-row-action,
+	.tg-routine-group-menu {
+		width: 44px;
+		height: 44px;
+	}
+
+	.tg-task-search-input,
+	.tg-timer-input {
+		height: 44px;
+	}
+
+	.tg-task-row-main {
+		grid-template-columns: 44px minmax(0, 1fr) 44px;
+		align-items: start;
+		gap: 6px;
+	}
+
+	.tg-task-description {
+		min-height: 44px;
+		max-height: none;
+		display: -webkit-box;
+		align-content: center;
+	}
+
+	.tg-task-inline-expanded {
+		margin-left: 50px;
+	}
+
 	.tg-task-panel button.tg-task-status-control {
-		min-width: 36px !important;
-		min-height: 36px !important;
-		height: 36px !important;
+		min-width: 44px !important;
+		min-height: 44px !important;
+		height: 44px !important;
+	}
+
+	.tg-task-layer button {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	.tg-task-menu-item {
+		min-height: 44px;
+	}
+
+	.tg-task-filter-choice,
+	.tg-task-source-option,
+	.tg-task-filter-footer button,
+	.tg-task-empty button,
+	.tg-task-timer-strip-stop,
+	.tg-task-timer-strip-open,
+	.tg-routine-manage-button,
+	.tg-routine-message > button,
+	.tg-routine-yesterday > button,
+	.tg-routine-manager-add-item,
+	.tg-routine-manager-icon,
+	.tg-routine-weekday {
+		min-height: 44px;
+	}
+
+	.tg-routine-manager-icon {
+		width: 44px;
+		height: 44px;
+	}
+
+	.modal.tg-task-modal button,
+	.modal.tg-task-edit-modal button,
+	.modal.tg-task-timer-modal button,
+	.modal.tg-task-delete-modal button {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	.modal.tg-task-modal input,
+	.modal.tg-task-modal select,
+	.modal.tg-task-edit-modal input,
+	.modal.tg-task-edit-modal select,
+	.modal.tg-task-timer-modal input,
+	.modal.tg-task-timer-modal select {
+		min-height: 44px;
+	}
+}
+
+@media (hover: none) and (pointer: coarse) and (max-width: 520px) {
+	.tg-task-menu,
+	.tg-task-filter-panel {
+		left: 8px !important;
+		right: 8px;
+		top: auto !important;
+		bottom: max(8px, env(safe-area-inset-bottom));
+		width: auto;
+		max-width: none;
+		max-height: calc(100dvh - 16px - env(safe-area-inset-bottom));
+		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 }
 
@@ -2624,6 +2779,14 @@
 	border-radius: 12px;
 	background: var(--background-primary);
 	box-shadow: 0 14px 42px color-mix(in srgb, var(--background-modifier-box-shadow) 40%, transparent);
+}
+
+.modal.tg-task-edit-modal,
+.modal.tg-task-timer-modal,
+.modal.tg-task-delete-modal {
+	max-height: calc(100dvh - 16px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .tg-task-timer-form {
@@ -2803,48 +2966,19 @@
 	gap: 6px;
 }
 
+/* 弹窗按钮统一并入 Design System 3 分级体系（三级动作 + 语义色），此处仅保留尺寸级联。 */
 .tg-task-modal-button {
-	appearance: none;
 	min-height: 34px;
-	margin: 0;
 	padding: 5px 11px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 7px;
-	background: var(--background-secondary);
-	box-shadow: none;
-	color: var(--text-normal);
-	font: inherit;
-	font-size: 11.5px;
-	cursor: pointer;
+	font-size: 12px;
 }
 
-.tg-task-modal-button:hover:not(:disabled),
-.tg-task-modal-button:focus-visible {
-	border-color: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-modifier-border));
-	background: var(--background-modifier-hover);
-}
-
-.tg-task-modal-button:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--interactive-accent) 72%, transparent);
-	outline-offset: 1px;
-}
-
+/* 保留历史变体名作为语义别名（指向统一分级样式）。
+   .is-quiet（三级次操作）、.is-primary（主操作）、.is-danger（危险语义）均由 Design System 3 别名层提供外观。 */
 .tg-task-modal-button.is-quiet {
 	min-height: 30px;
 	padding: 3px 9px;
-	font-size: 10.5px;
-}
-
-.tg-task-modal-button.is-primary {
-	border-color: var(--interactive-accent);
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-}
-
-.tg-task-modal-button.is-danger {
-	border-color: color-mix(in srgb, var(--text-error) 55%, var(--background-modifier-border));
-	background: color-mix(in srgb, var(--text-error) 11%, var(--background-secondary));
-	color: var(--text-error);
+	font-size: 12px;
 }
 
 .tg-task-modal-button:disabled {
@@ -2900,10 +3034,21 @@
 	display: none;
 }
 
+/* 错误条「复制」图标钮（三级 · ghost） */
 .tg-task-modal-error button {
 	display: inline-flex;
 	flex: 0 0 auto;
 	padding: 4px;
+	border: 0;
+	border-radius: var(--tg-btn-radius, 6px);
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
+.tg-task-modal-error button:hover:not(:disabled),
+.tg-task-modal-error button:focus-visible {
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
 }
 
 .tg-task-modal-error button svg {
@@ -2934,6 +3079,12 @@
 	margin-top: 4px;
 }
 
+.tg-timer-stop-footer {
+	display: grid;
+	grid-template-columns: repeat(3, max-content);
+	justify-content: end;
+}
+
 .tg-task-modal-footer-spacer {
 	flex: 1;
 }
@@ -2954,13 +3105,43 @@
 
 @media (max-width: 500px) {
 	.modal.tg-task-edit-modal,
-	.modal.tg-task-timer-modal {
+	.modal.tg-task-timer-modal,
+	.modal.tg-task-delete-modal,
+	.modal.tg-task-modal {
 		width: calc(100vw - 16px);
-		padding: 18px 14px;
+		max-height: calc(100dvh - 16px);
+		padding: 18px 14px max(18px, env(safe-area-inset-bottom));
+		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 
 	.tg-task-modal-footer {
 		flex-wrap: wrap;
+		position: sticky;
+		bottom: 0;
+		z-index: 2;
+		padding: 9px 0 max(18px, env(safe-area-inset-bottom));
+		background: var(--background-primary);
+	}
+
+	.tg-task-modal-footer-spacer {
+		display: none;
+	}
+
+	.tg-task-modal-footer > .tg-task-modal-button {
+		flex: 1 1 calc(50% - 4px);
+		min-height: 44px;
+	}
+
+	.tg-timer-stop-footer {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		width: 100%;
+	}
+
+	.tg-timer-stop-footer > .tg-task-modal-button.is-primary {
+		grid-column: 1 / -1;
+		width: 100%;
 	}
 }
 
@@ -2996,12 +3177,17 @@
 /* 每日流程管理弹窗 */
 .modal.tg-task-modal {
 	width: min(680px, calc(100vw - 24px));
-	max-height: min(82vh, 760px);
-	overflow: auto;
+	max-height: min(calc(100dvh - 16px), 760px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 12px;
 	background: var(--background-primary);
 	box-shadow: 0 14px 42px color-mix(in srgb, var(--background-modifier-box-shadow) 40%, transparent);
+}
+
+.modal.tg-task-create-modal {
+	width: min(560px, calc(100vw - 28px));
 }
 
 .tg-routine-manager-intro,
@@ -3026,28 +3212,14 @@
 	margin: 14px 0 10px;
 }
 
+/* 流程管理弹窗按钮统一并入分级按钮；此处仅保留局部尺寸。
+   ⚠ 特例：manager 内的 danger 图标钮必须维持实底淡红（行内 30px 图标用描边可读性差），
+   见下方 .tg-routine-manager-icon.is-danger 覆盖——这是分级体系中已记录的例外。 */
 .tg-task-button-primary,
 .tg-task-button-quiet,
 .tg-routine-manager-add-item,
 .tg-routine-manager-icon {
-	appearance: none;
-	border: 1px solid var(--background-modifier-border);
 	border-radius: 7px;
-	box-shadow: none;
-	font: inherit;
-	cursor: pointer;
-}
-
-.tg-task-button-primary {
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-}
-
-.tg-task-button-quiet,
-.tg-routine-manager-add-item,
-.tg-routine-manager-icon {
-	background: var(--background-secondary);
-	color: var(--text-muted);
 }
 
 .tg-routine-manager-group {
@@ -3113,6 +3285,7 @@
 	gap: 4px;
 }
 
+/* 流程管理图标钮几何尺寸与 danger 实底特例（描述见上）；外观由别名层提供。 */
 .tg-routine-manager-icon {
 	display: inline-flex;
 	align-items: center;
@@ -3129,6 +3302,7 @@
 
 .tg-routine-manager-icon.is-danger {
 	color: var(--text-error);
+	background: color-mix(in srgb, var(--text-error) 12%, transparent);
 }
 
 .tg-routine-manager-add-item {
@@ -3143,14 +3317,15 @@
 	gap: 5px;
 }
 
+/* 分段选择 · 流程星期（方角变体，颜色语言对齐 .tg-segmented：透明底 + 细边 + accent 选中） */
 .tg-routine-weekday {
 	min-width: 0;
 	min-height: 34px;
 	padding: 0;
-	border: 1px solid var(--background-modifier-border);
+	border: 1px solid var(--tg-btn-border, var(--background-modifier-border));
 	border-radius: 7px;
-	background: var(--background-secondary);
-	color: var(--text-muted);
+	background: transparent;
+	color: var(--tg-text-muted, var(--text-muted));
 }
 
 .tg-routine-weekday.is-selected {
@@ -3212,15 +3387,37 @@
 	}
 }
 
+/* Keep every task-related modal inside short mobile and landscape viewports.
+   This block intentionally follows the wider routine-modal defaults above. */
+@media (max-width: 500px) {
+	.modal.tg-task-modal,
+	.modal.tg-task-create-modal,
+	.modal.tg-task-edit-modal,
+	.modal.tg-task-timer-modal,
+	.modal.tg-task-delete-modal {
+		width: calc(100vw - 16px);
+		max-height: calc(100dvh - 16px);
+	}
+
+	.tg-routine-weekdays {
+		gap: 1px;
+	}
+}
+
 /* Claude Design 03: 此刻回环 · 日晷时间视图 */
 .tg-time-view {
 	container: tg-sundial / inline-size;
+	min-width: 0;
+	max-width: 100%;
 }
 
 .tg-sundial-root {
 	display: flex;
 	flex-direction: column;
 	gap: 15px;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
 	padding: 14px;
 	color: var(--tg-text-primary);
 }
@@ -3248,7 +3445,7 @@
 
 .tg-sundial-section-label {
 	color: var(--tg-text-muted);
-	font-size: 10px;
+	font-size: 11px;
 	font-weight: 700;
 	letter-spacing: .075em;
 	text-transform: uppercase;
@@ -3265,20 +3462,61 @@
 	gap: 3px;
 }
 
-.tg-sundial-range-button {
+/* 二级 · 分段选择统一 token（含日晷范围、计时建议芯片的收敛基座；流程星期/筛选选项按同 token 在各自区块收敛） */
+.tg-segmented,
+.tg-chip {
 	appearance: none;
 	-webkit-appearance: none;
-	min-height: 26px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	margin: 0;
-	padding: 3px 7px;
+	padding: 0 11px;
 	border: 1px solid var(--tg-border-default);
 	border-radius: var(--tg-radius-pill);
 	background: transparent;
 	background-image: none;
 	box-shadow: none;
 	color: var(--tg-text-muted);
-	font-size: 10px;
+	font-family: inherit;
 	cursor: pointer;
+	transition: transform var(--tg-duration-fast) ease, background var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, border-color var(--tg-duration-fast) ease;
+}
+
+.tg-segmented:hover,
+.tg-chip:hover {
+	transform: translateY(-1px);
+	background: var(--tg-surface-hover);
+	color: var(--tg-text-primary);
+}
+
+.tg-segmented:focus-visible,
+.tg-chip:focus-visible {
+	outline: 2px solid var(--tg-accent-strong);
+	outline-offset: 2px;
+}
+
+.tg-segmented--active {
+	border-color: var(--tg-accent);
+	background: color-mix(in srgb, var(--tg-accent) 13%, transparent);
+	background-image: none;
+	color: var(--tg-text-primary);
+}
+
+.tg-segmented--active:hover {
+	border-color: var(--tg-accent);
+	background: color-mix(in srgb, var(--tg-accent) 13%, transparent);
+}
+
+.tg-segmented:disabled {
+	opacity: .5;
+	cursor: not-allowed;
+}
+
+/* 日晷时间范围（二级 · 分段选择）：外观收敛到 .tg-segmented（TS 已挂类），保留其紧凑字号与高度。 */
+.tg-sundial-range-button {
+	min-height: 26px;
+	font-size: 11px;
 }
 
 .tg-sundial-range-button.is-active {
@@ -3307,7 +3545,7 @@
 	grid-template-rows: repeat(7, var(--tg-heatmap-cell-size));
 	gap: var(--tg-heatmap-gap);
 	color: var(--tg-text-faint);
-	font-size: 7px;
+	font-size: 11px;
 	line-height: var(--tg-heatmap-cell-size);
 	text-align: center;
 }
@@ -3386,7 +3624,7 @@
 	gap: 6px;
 	margin-top: 6px;
 	color: var(--tg-text-faint);
-	font-size: 8.5px;
+	font-size: 11px;
 }
 
 .tg-sundial-heat-legend-cells {
@@ -3428,7 +3666,7 @@
 .tg-sundial-calendar-weekday {
 	height: 12px;
 	color: var(--tg-text-faint);
-	font-size: 8px;
+	font-size: 11px;
 	line-height: 12px;
 	text-align: center;
 }
@@ -3451,7 +3689,7 @@
 	box-shadow: none;
 	color: var(--tg-text-muted);
 	font-family: var(--font-monospace);
-	font-size: 9px;
+	font-size: 12px;
 	cursor: pointer;
 }
 
@@ -3533,65 +3771,484 @@
 	font-variant-numeric: tabular-nums;
 }
 
-/* Design System 3 — Button / Chip / Timer Panel */
+/* Design System 3 — Button / Chip / Timer Panel
+   按钮分级体系（与语义色正交）：
+   Tier 1 主导航  .tg-view-switcher-button            accent 边 + 淡紫填充（紫色 = 选中，与二级同语言、填充更重）
+   Tier 2 分段    .tg-segmented / .tg-segmented--active  accent 边 + 13% 填充胶囊（含 tg-chip、日晷范围、星期、筛选选项收敛）
+   Tier 3 动作    .tg-btn--primary（accent 实心 + 轻投影）/ --secondary（常驻描边）/ --secondary-quiet（淡底）/ --ghost（透明图标钮）/ --danger（常驻红描边）/ --danger-solid（实心）
+   全站选中语言唯一：紫色 = 选中；层级越高，紫色强度越重。旧类名全部保留为别名指向新样式，供回归过渡；新代码一律使用分级类。 */
+
+/* ── 统一按钮 token（作用域：主容器 + 全部任务弹窗） ───────────────────────── */
+.tg-container,
+.modal.tg-task-modal,
+.modal.tg-task-edit-modal,
+.modal.tg-task-timer-modal,
+.modal.tg-task-delete-modal {
+	--tg-btn-h: 36px;
+	--tg-btn-h-sm: 34px;
+	--tg-btn-h-chip: 27px;
+	--tg-btn-radius: 6px;
+	--tg-btn-radius-sm: 7px;
+	--tg-btn-font: var(--tg-text-sm, 12px);
+	--tg-btn-gap: 6px;
+	--tg-btn-pad-x: 14px;
+	--tg-btn-pad-x-sm: 11px;
+	--tg-btn-focus-ring: var(--tg-accent-strong, color-mix(in srgb, var(--interactive-accent) 72%, white));
+	--tg-btn-primary-bg: var(--tg-accent, var(--interactive-accent));
+	--tg-btn-primary-bg-hover: var(--tg-accent-strong, color-mix(in srgb, var(--interactive-accent) 72%, white));
+	--tg-btn-primary-fg: var(--text-on-accent, #fff);
+	--tg-btn-border: var(--tg-border-default, var(--background-modifier-border));
+	--tg-btn-ghost-hover: var(--tg-surface-hover, var(--background-modifier-hover));
+	--tg-btn-danger: var(--tg-status-overdue, var(--text-error));
+	--tg-nav-h: 36px;
+	--tg-nav-radius: 6px;
+	--tg-nav-active-bg: color-mix(in srgb, var(--tg-accent, var(--interactive-accent)) 17%, transparent);
+	--tg-nav-active-border: var(--tg-accent, var(--interactive-accent));
+	--tg-btn-primary-shadow: 0 1px 3px color-mix(in srgb, var(--tg-accent, var(--interactive-accent)) 30%, transparent);
+}
+
+/* ── 别名层：旧类名 → 统一分级样式（视觉收敛，DOM 类名不变） ──────────────── */
+
+/* 弹窗动作按钮（三级） */
+.tg-task-modal-button {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: var(--tg-btn-h-sm, 34px);
+	margin: 0;
+	padding: 5px var(--tg-btn-pad-x-sm, 11px);
+	border: 1px solid var(--tg-btn-border, var(--background-modifier-border));
+	border-radius: var(--tg-btn-radius-sm, 7px);
+	background: transparent;
+	background-image: none;
+	box-shadow: none;
+	color: var(--tg-text-primary, var(--text-normal));
+	font-family: inherit;
+	font-size: var(--tg-btn-font, 12px);
+	font-weight: 600;
+	cursor: pointer;
+	transition: background var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, border-color var(--tg-duration-fast) ease;
+}
+
+.tg-task-modal-button:hover:not(:disabled),
+.tg-task-modal-button:focus-visible {
+	border-color: var(--tg-btn-border, var(--background-modifier-border));
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+}
+
+.tg-task-modal-button:focus-visible {
+	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
+	outline-offset: 1px;
+}
+
+.tg-task-modal-button.is-primary,
+.tg-task-modal-button.is-primary:hover:not(:disabled),
+.modal.tg-task-delete-modal .tg-task-modal-button.is-primary:hover:not(:disabled),
+.modal.tg-task-delete-modal button.tg-task-modal-button:hover:not(:disabled),
+.modal.tg-task-edit-modal .tg-task-modal-button.is-primary:hover:not(:disabled),
+.modal.tg-task-edit-modal button.tg-task-modal-button:hover:not(:disabled) {
+	border-color: var(--tg-btn-primary-bg, var(--interactive-accent));
+	background: var(--tg-btn-primary-bg, var(--interactive-accent));
+	color: var(--tg-btn-primary-fg, var(--text-on-accent));
+}
+
+.tg-task-modal-button.is-danger,
+.modal.tg-task-delete-modal button.tg-task-modal-button,
+.modal.tg-task-delete-modal .tg-task-modal-button.is-danger,
+.modal.tg-task-edit-modal .tg-task-modal-button.is-danger {
+	border-color: color-mix(in srgb, var(--tg-btn-danger, var(--text-error)) 55%, var(--background-modifier-border));
+	background: color-mix(in srgb, var(--tg-btn-danger, var(--text-error)) 11%, var(--background-secondary));
+	color: var(--tg-btn-danger, var(--text-error));
+}
+
+.tg-task-modal-button.is-danger:hover:not(:disabled) {
+	border-color: var(--tg-btn-danger, var(--text-error));
+	background: color-mix(in srgb, var(--tg-btn-danger, var(--text-error)) 20%, var(--background-secondary));
+	color: var(--tg-btn-danger, var(--text-error));
+}
+
+.tg-task-button-primary {
+	border-color: var(--tg-btn-primary-bg, var(--interactive-accent));
+	background: var(--tg-btn-primary-bg, var(--interactive-accent));
+	color: var(--tg-btn-primary-fg, var(--text-on-accent));
+	font-family: inherit;
+	font-size: var(--tg-btn-font, 12px);
+	font-weight: 600;
+}
+
+.tg-task-button-primary:hover:not(:disabled),
+.tg-task-button-primary:focus-visible {
+	border-color: var(--tg-btn-primary-bg-hover, var(--interactive-accent));
+	background: var(--tg-btn-primary-bg-hover, var(--interactive-accent));
+	color: var(--tg-btn-primary-fg, var(--text-on-accent));
+}
+
+.tg-task-button-quiet,
+.tg-routine-manager-add-item {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--tg-btn-border, var(--background-modifier-border));
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text-primary, var(--text-normal));
+	font-family: inherit;
+	font-size: var(--tg-btn-font, 12px);
+	font-weight: 600;
+	cursor: pointer;
+	transition: background var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease;
+}
+
+.tg-task-button-quiet:hover:not(:disabled),
+.tg-task-button-quiet:focus-visible,
+.tg-routine-manager-add-item:hover:not(:disabled),
+.tg-routine-manager-add-item:focus-visible {
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+	color: var(--tg-text-primary, var(--text-normal));
+}
+
+.tg-task-button-quiet:focus-visible,
+.tg-routine-manager-add-item:focus-visible {
+	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
+	outline-offset: 1px;
+}
+
+/* 流程管理图标钮（三级 · ghost） */
+.tg-routine-manager-icon {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text-muted, var(--text-muted));
+	cursor: pointer;
+}
+
+.tg-routine-manager-icon:hover:not(:disabled),
+.tg-routine-manager-icon:focus-visible {
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+	color: var(--tg-text-primary, var(--text-normal));
+}
+
+.tg-routine-manager-icon:focus-visible {
+	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
+	outline-offset: 1px;
+}
+
+.tg-routine-manager-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.tg-routine-manager-icon.is-danger {
+	color: var(--tg-btn-danger, var(--text-error));
+}
+
+/* 流程卡片/提醒条按钮（三级 · 次操作描边） */
+.tg-routine-manage-button,
+.tg-routine-message > button,
+.tg-routine-yesterday > button {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--tg-btn-border, var(--background-modifier-border));
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text-muted, var(--text-muted));
+	font-family: inherit;
+	font-size: var(--tg-btn-font, 12px);
+	cursor: pointer;
+	transition: background var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, border-color var(--tg-duration-fast) ease;
+}
+
+.tg-routine-manage-button:hover:not(:disabled),
+.tg-routine-manage-button:focus-visible,
+.tg-routine-message > button:hover:not(:disabled),
+.tg-routine-message > button:focus-visible,
+.tg-routine-yesterday > button:hover:not(:disabled),
+.tg-routine-yesterday > button:focus-visible {
+	border-color: var(--tg-accent);
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+	color: var(--tg-text-primary, var(--text-normal));
+}
+
+.tg-routine-manage-button:focus-visible,
+.tg-routine-message > button:focus-visible,
+.tg-routine-yesterday > button:focus-visible {
+	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
+	outline-offset: 1px;
+}
+
+.tg-routine-group-menu {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text-muted, var(--text-muted));
+	cursor: pointer;
+}
+
+.tg-routine-group-menu:hover:not(:disabled),
+.tg-routine-group-menu:focus-visible {
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+	color: var(--tg-text-primary, var(--text-normal));
+}
+
+.tg-routine-group-menu:focus-visible {
+	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
+	outline-offset: 1px;
+}
+
+/* 任务卡 ghost 图标钮（+ / ↻ / 清空 X / … / 行内 ↻ ⋮） */
+.tg-task-icon-button,
+.tg-task-search-clear,
+.tg-task-more-button,
+.tg-task-row-action {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text-muted, var(--text-muted));
+	cursor: pointer;
+	font: inherit;
+}
+
+.tg-task-icon-button:hover:not(:disabled),
+.tg-task-icon-button:focus-visible,
+.tg-task-search-clear:hover:not(:disabled),
+.tg-task-search-clear:focus-visible,
+.tg-task-more-button:hover:not(:disabled),
+.tg-task-more-button:focus-visible,
+.tg-task-row-action:hover:not(:disabled),
+.tg-task-row-action:focus-visible {
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+	color: var(--tg-text-primary, var(--text-normal));
+}
+
+.tg-task-icon-button:focus-visible,
+.tg-task-search-clear:focus-visible,
+.tg-task-more-button:focus-visible,
+.tg-task-row-action:focus-visible {
+	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
+	outline-offset: 1px;
+}
+
+.tg-task-icon-button svg,
+.tg-task-more-button svg,
+.tg-task-row-action svg {
+	width: 15px;
+	height: 15px;
+}
+
+.tg-task-icon-button {
+	width: 30px;
+	height: 30px;
+	border-radius: var(--tg-btn-radius, 6px);
+}
+
+.tg-task-more-button {
+	width: 26px;
+	height: 26px;
+	border-radius: var(--tg-btn-radius, 6px);
+}
+
+.tg-task-row-action {
+	width: 25px;
+	height: 25px;
+	border-radius: var(--tg-btn-radius, 6px);
+}
+
+.tg-task-search-clear {
+	width: 27px;
+	height: 27px;
+	border-radius: var(--tg-btn-radius, 6px);
+}
+
+/* 计时条按钮（三级 · 次操作描边，与流程卡按钮同语言） */
+.tg-task-timer-strip-stop,
+.tg-task-timer-strip-open {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--tg-btn-border, var(--background-modifier-border));
+	border-radius: var(--tg-btn-radius-sm, 7px);
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text-muted, var(--text-muted));
+	font-family: inherit;
+	cursor: pointer;
+	transition: background var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, border-color var(--tg-duration-fast) ease;
+}
+
+.tg-task-timer-strip-stop:hover:not(:disabled),
+.tg-task-timer-strip-stop:focus-visible,
+.tg-task-timer-strip-open:hover:not(:disabled),
+.tg-task-timer-strip-open:focus-visible {
+	border-color: var(--tg-accent);
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+	color: var(--tg-text-primary, var(--text-normal));
+}
+
+.tg-task-timer-strip-stop:focus-visible,
+.tg-task-timer-strip-open:focus-visible {
+	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
+	outline-offset: 1px;
+}
+/* ── Tier 3 · 动作按钮基类 ─────────────────────────────────────────────────── */
 .tg-btn {
 	appearance: none;
 	-webkit-appearance: none;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 6px;
-	height: 36px;
+	gap: var(--tg-btn-gap, 6px);
+	height: var(--tg-btn-h, 36px);
 	margin: 0;
-	padding: 0 14px;
+	padding: 0 var(--tg-btn-pad-x, 14px);
 	border: 1px solid transparent;
-	border-radius: 6px;
+	border-radius: var(--tg-btn-radius, 6px);
 	background: transparent;
 	background-image: none;
 	box-shadow: none;
-	color: var(--tg-text-primary);
+	color: var(--tg-text-primary, var(--text-normal));
 	font-family: inherit;
-	font-size: var(--tg-text-sm);
+	font-size: var(--tg-btn-font, 12px);
 	font-weight: 600;
 	white-space: nowrap;
 	cursor: pointer;
-	transition: background var(--tg-duration-fast) ease, transform var(--tg-duration-fast) ease;
+	transition: background var(--tg-duration-fast) ease, transform var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, border-color var(--tg-duration-fast) ease;
 }
 
 .tg-btn:disabled { opacity: .5; cursor: not-allowed; }
-.tg-btn:focus-visible { outline: 2px solid var(--tg-accent-strong); outline-offset: 2px; }
+.tg-btn:focus-visible { outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong)); outline-offset: 2px; }
 .tg-btn-icon { display: inline-flex; line-height: 0; }
 .tg-btn-icon svg { display: block; }
 
+/* 主操作：每个界面唯一 CTA（静息态即实心 accent + 轻投影） */
+.tg-btn--primary,
 .tg-btn-primary {
-	border-color: var(--tg-accent);
-	background: var(--tg-accent);
+	border-color: var(--tg-btn-primary-bg, var(--tg-accent));
+	background: var(--tg-btn-primary-bg, var(--tg-accent));
+	color: var(--tg-btn-primary-fg, #fff);
+	box-shadow: var(--tg-btn-primary-shadow, 0 1px 3px color-mix(in srgb, var(--tg-accent, var(--interactive-accent)) 30%, transparent));
+}
+
+.tg-btn--primary:hover:not(:disabled),
+.tg-btn-primary:hover:not(:disabled) {
+	border-color: var(--tg-btn-primary-bg-hover, var(--tg-accent-strong));
+	background: var(--tg-btn-primary-bg-hover, var(--tg-accent-strong));
+}
+
+/* 次操作 · 描边 */
+.tg-btn--secondary,
+.tg-btn-neutral {
+	border-color: var(--tg-btn-border, var(--tg-border-default));
+	background: transparent;
+	color: var(--tg-text-primary, var(--text-normal));
+}
+
+.tg-btn--secondary:hover:not(:disabled),
+.tg-btn-neutral:hover:not(:disabled) {
+	background: var(--tg-btn-ghost-hover, var(--tg-surface-hover));
+}
+
+/* 次操作 · 淡底（无边框，紧凑行内） */
+.tg-btn--secondary-quiet {
+	border-color: transparent;
+	background: transparent;
+	color: var(--tg-text-muted, var(--text-muted));
+	font-weight: 500;
+}
+
+.tg-btn--secondary-quiet:hover:not(:disabled) {
+	background: var(--tg-btn-ghost-hover, var(--tg-surface-hover));
+	color: var(--tg-text-primary, var(--text-normal));
+}
+
+/* 图标钮 · 透明底 + hover 淡底（…、↻、折叠、关闭 X 等） */
+.tg-btn--ghost {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	background-image: none;
+	box-shadow: none;
+	color: var(--tg-text-muted, var(--text-muted));
+	font: inherit;
+	cursor: pointer;
+}
+
+.tg-btn--ghost:hover:not(:disabled),
+.tg-btn--ghost:focus-visible {
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+	color: var(--tg-text-primary, var(--text-normal));
+}
+
+.tg-btn--ghost:focus-visible {
+	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
+	outline-offset: 1px;
+}
+
+.tg-btn--ghost svg {
+	width: 15px;
+	height: 15px;
+}
+
+/* 危险语义（只换颜色，不换形状） · 描边危险 */
+.tg-btn--danger,
+.tg-btn-danger-quiet {
+	border-color: var(--tg-btn-danger, var(--tg-status-overdue));
+	background: transparent;
+	color: var(--tg-btn-danger, var(--tg-status-overdue));
+}
+
+.tg-btn--danger:hover:not(:disabled),
+.tg-btn-danger-quiet:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--tg-btn-danger, var(--tg-status-overdue)) 12%, transparent);
+}
+
+/* 危险语义 · 实心危险（比描边更重的确认动作） */
+.tg-btn--danger-solid {
+	border-color: var(--tg-btn-danger, var(--tg-status-overdue));
+	background: var(--tg-btn-danger, var(--tg-status-overdue));
 	color: #fff;
 }
 
-.tg-btn-primary:hover:not(:disabled) {
-	border-color: var(--tg-accent-strong);
-	background: var(--tg-accent-strong);
+.tg-btn--danger-solid:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--tg-btn-danger, var(--tg-status-overdue)) 86%, black);
 }
 
-.tg-btn-neutral {
-	border-color: var(--tg-border-default);
-	background: transparent;
-	color: var(--tg-text-primary);
-}
-
-.tg-btn-neutral:hover:not(:disabled) { background: var(--tg-surface-hover); }
-
-.tg-btn-danger-quiet {
-	border-color: var(--tg-status-overdue);
-	background: transparent;
-	color: var(--tg-status-overdue);
-}
-
-.tg-btn-danger-quiet:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--tg-status-overdue) 12%, transparent);
-}
-
+/* 兼容别名 · 计时面板历史四级（映射到新分级） */
 .tg-btn-quiet {
 	height: 30px;
 	padding: 0 10px;
@@ -3622,37 +4279,25 @@
 .tg-chip-group-label {
 	flex: 0 0 auto;
 	color: var(--tg-text-faint);
-	font-size: 8.5px;
+	font-size: 11px;
 	font-weight: 600;
 	letter-spacing: .05em;
 	text-transform: uppercase;
 }
 
+/* 计时建议芯片（二级 · 分段选择）：外观收敛到 .tg-segmented 分级 token（见上方），此处仅保留芯片尺寸。 */
 .tg-chip {
-	appearance: none;
-	-webkit-appearance: none;
-	height: 27px;
-	margin: 0;
-	padding: 0 11px;
-	border: 1px solid var(--tg-border-default);
-	border-radius: var(--tg-radius-pill);
-	background: transparent;
-	background-image: none;
-	box-shadow: none;
-	color: var(--tg-text-muted);
-	font-family: inherit;
-	font-size: var(--tg-text-xs);
-	cursor: pointer;
-	transition: transform var(--tg-duration-fast) ease, background var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease;
+	height: var(--tg-btn-h-chip, 27px);
+	padding: 0 var(--tg-btn-pad-x-sm, 11px);
+	font-size: var(--tg-btn-font, 12px);
 }
 
-.tg-chip:hover {
-	transform: translateY(-1px);
-	background: var(--tg-surface-hover);
+.tg-chip.is-active {
+	border-color: var(--tg-accent);
+	background: color-mix(in srgb, var(--tg-accent) 13%, transparent);
+	background-image: none;
 	color: var(--tg-text-primary);
 }
-
-.tg-chip:focus-visible { outline: 2px solid var(--tg-accent-strong); outline-offset: 2px; }
 
 @container tgtimer (max-width: 300px) {
 	.tg-chip-groups {
@@ -3861,13 +4506,13 @@
 .tg-sundial-viz-5 { background: var(--tg-viz-5); }
 
 .tg-sundial-activity-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
-.tg-sundial-activity-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-height: 25px; padding: 2px 3px; border-radius: 4px; color: var(--tg-text-primary); font-size: 10.5px; }
+.tg-sundial-activity-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-height: 25px; padding: 2px 3px; border-radius: 4px; color: var(--tg-text-primary); font-size: 11px; }
 .tg-sundial-activity-row:hover { background: var(--tg-surface-hover); }
 .tg-sundial-activity-swatch { width: 7px; height: 7px; border-radius: 2px; }
 .tg-sundial-activity-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tg-sundial-activity-value { color: var(--tg-text-muted); font-family: var(--font-monospace); font-size: 9.5px; white-space: nowrap; }
-.tg-sundial-activity-status { display: flex; align-items: center; gap: 2px; margin-top: 8px; color: var(--tg-text-faint); font-size: 9.5px; }
-.tg-sundial-activity-empty { padding: 13px 0 4px; color: var(--tg-text-faint); font-size: 10px; text-align: center; }
+.tg-sundial-activity-value { color: var(--tg-text-muted); font-family: var(--font-monospace); font-size: 11px; white-space: nowrap; }
+.tg-sundial-activity-status { display: flex; align-items: center; gap: 2px; margin-top: 8px; color: var(--tg-text-faint); font-size: 11px; }
+.tg-sundial-activity-empty { padding: 13px 0 4px; color: var(--tg-text-faint); font-size: 11px; text-align: center; }
 
 .tg-sundial-tooltip {
 	position: fixed;
@@ -3899,6 +4544,86 @@
 	.tg-sundial-root * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
 
+@media (hover: none), (pointer: coarse) {
+	.tg-sundial-range-button,
+	.tg-segmented,
+	.tg-btn,
+	.tg-btn-quiet,
+	.tg-chip,
+	.tg-sundial-calendar-day {
+		min-width: 44px;
+		min-height: 44px;
+		height: 44px;
+	}
+
+	.tg-sundial-calendar {
+		gap: 0;
+	}
+
+	/* Seven 44px columns cannot fit at 125% zoom in a narrow phone viewport.
+	   Keep the grid fluid and extend each button's hit area with its pseudo-element. */
+	.tg-container button.tg-sundial-calendar-day,
+	.modal.tg-task-modal button.tg-routine-weekday {
+		position: relative;
+		width: 100%;
+		min-width: 0;
+	}
+
+	.tg-sundial-calendar-day::before,
+	.tg-routine-weekday::before {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 50%;
+		width: max(44px, 100%);
+		transform: translateX(-50%);
+	}
+
+	.tg-sundial-heat-grid {
+		grid-template-rows: repeat(7, 44px);
+		grid-auto-columns: 44px;
+		gap: 2px;
+	}
+
+	.tg-sundial-heat-weekdays {
+		grid-template-rows: repeat(7, 44px);
+		gap: 2px;
+		line-height: 44px;
+	}
+
+	.tg-sundial-heat-cell {
+		--tg-heat-cell-fill: var(--tg-heat-empty);
+
+		width: 44px;
+		height: 44px;
+		min-width: 44px;
+		min-height: 44px;
+		background: transparent;
+	}
+
+	.tg-sundial-heat-cell::before {
+		content: "";
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: 14px;
+		height: 14px;
+		border-radius: var(--tg-cell-radius);
+		background: var(--tg-heat-cell-fill);
+		transform: translate(-50%, -50%);
+	}
+
+	.tg-sundial-heat-cell.level-1 { --tg-heat-cell-fill: var(--tg-heat-1); background: transparent; }
+	.tg-sundial-heat-cell.level-2 { --tg-heat-cell-fill: var(--tg-heat-2); background: transparent; }
+	.tg-sundial-heat-cell.level-3 { --tg-heat-cell-fill: var(--tg-heat-3); background: transparent; }
+	.tg-sundial-heat-cell.level-4 { --tg-heat-cell-fill: var(--tg-heat-4); background: transparent; }
+
+	.tg-sundial-heat-cell.is-today::after {
+		inset: 11px;
+	}
+}
+
 @container tg-sundial (max-width: 299px) {
 	.tg-sundial-root { gap: 12px; padding: 11px; }
 	.tg-sundial-range-button { padding-inline: 6px; }
@@ -3913,10 +4638,10 @@
 	.tg-sundial-dial { width: 292px; }
 	.tg-sundial-clock { font-size: 21px; }
 	.tg-timer-panel { padding: 13px; }
-	.tg-sundial-calendar-day { font-size: 10px; }
+	.tg-sundial-calendar-day { font-size: 12px; }
 }
 
-@container tg-sundial (min-width: 680px) {
+@container tg-sundial (min-width: 760px) {
 	.tg-sundial-root { gap: 20px; padding: 20px; }
 	.tg-sundial-context { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(210px, .6fr); gap: 22px; align-items: start; }
 	.tg-sundial-now-zone { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .85fr); gap: 24px; align-items: center; }

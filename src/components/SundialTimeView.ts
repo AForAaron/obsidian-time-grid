@@ -132,15 +132,15 @@ export class SundialTimeView {
 			['1y', '1年'],
 		] as Array<[TimeRange, string]>).forEach(([range, label]) => {
 			const button = ranges.createEl('button', {
-				cls: 'tg-sundial-range-button',
+				cls: 'tg-segmented tg-sundial-range-button',
 				text: label,
 				attr: { type: 'button', 'aria-label': `显示${label}活动轨迹` },
 			});
-			button.toggleClass('is-active', this.range === range);
+			button.toggleClass('tg-segmented--active', this.range === range);
 			button.addEventListener('click', () => {
 				if (this.range === range) return;
 				this.range = range;
-				for (const [key, candidate] of this.rangeButtons) candidate.toggleClass('is-active', key === range);
+				for (const [key, candidate] of this.rangeButtons) candidate.toggleClass('tg-segmented--active', key === range);
 				this.lastHeatKey = '';
 				this.refreshHeatIfNeeded(new Date());
 				void this.options.saveRange(range);

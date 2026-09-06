@@ -218,12 +218,15 @@ export class TaskPanel {
 
 		const totalOverRenderThreshold = displayBase.length > 200;
 		const filteredTaskIds = new Set(filteredTasks.map((task) => task.id));
+		const visibleRoutineGroups = routineSnapshot
+			? routineSnapshot.groups.map((group) => ({ ...group, items: group.items.filter((item) => filteredTaskIds.has(item.task.id)) }))
+				.filter((group) => group.items.length > 0 || !filtering)
+			: [];
+		if (routineSnapshot && (!filtering || visibleRoutineGroups.length > 0)) {
+			this.renderRoutineArea(this.container.createDiv('tg-routine-area'), routineSnapshot, visibleRoutineGroups);
+		}
 		for (const config of SECTION_CONFIG) {
 			const sectionTasks = sortTasks(config.section, filteredTasks.filter((task) => task.section === config.section && !task.routine));
-			const visibleRoutineGroups = config.section === 'today' && routineSnapshot
-				? routineSnapshot.groups.map((group) => ({ ...group, items: group.items.filter((item) => filteredTaskIds.has(item.task.id)) }))
-					.filter((group) => group.items.length > 0 || !hasActiveTaskFilters(this.filters))
-				: [];
 			if (config.section === 'done') {
 				sectionTasks.push(...filteredTasks.filter((task) => task.section === 'done' && Boolean(task.routine)));
 			}
@@ -234,9 +237,7 @@ export class TaskPanel {
 				counts.total[config.section] ?? 0,
 				filtering,
 				totalOverRenderThreshold,
-				settings.renderLimit,
-				routineSnapshot,
-				visibleRoutineGroups
+				settings.renderLimit
 			);
 		}
 		this.restoreScroll(outerScroll, previousScrollTop);
@@ -255,15 +256,16 @@ export class TaskPanel {
 		const titleBox = heading.createDiv('tg-task-center-title-box');
 		titleBox.createEl('h2', { cls: 'tg-task-center-title', text: '任务中心' });
 		titleBox.createDiv({ cls: 'tg-task-center-subtitle', text: '聚焦现在，轻松安排接下来' });
+		const actions = heading.createDiv('tg-task-center-actions');
 		if (this.options.actions) {
-			const create = heading.createEl('button', {
+			const create = actions.createEl('button', {
 				cls: 'tg-task-icon-button',
 				attr: { 'aria-label': '新建任务', title: '新建任务' },
 			});
 			setIcon(create, 'plus');
 			create.addEventListener('click', () => this.openCreateModal());
 		}
-		const refresh = heading.createEl('button', {
+		const refresh = actions.createEl('button', {
 			cls: 'tg-task-icon-button',
 			attr: { 'aria-label': '重新索引任务', title: '重新索引任务' },
 		});
@@ -514,9 +516,7 @@ export class TaskPanel {
 		totalCount: number,
 		filtering: boolean,
 		limitEnabled: boolean,
-		renderLimit: number,
-		routineSnapshot?: RoutineSnapshot,
-		routineGroups: RoutineGroupViewModel[] = []
+		renderLimit: number
 	): void {
 		const sectionEl = this.container.createDiv(`tg-task-section tg-task-section-${config.section}`);
 		const collapsed = this.isCollapsed(config.section);
@@ -541,11 +541,9 @@ export class TaskPanel {
 		}
 		if (config.section === 'overdue' || config.section === 'today') heading.setAttr('aria-disabled', 'true');
 		else heading.addEventListener('click', () => void this.toggleSection(config.section));
-		const hasRoutineArea = config.section === 'today' && Boolean(routineSnapshot);
-		if (collapsed || (tasks.length === 0 && routineGroups.length === 0 && !hasRoutineArea)) return;
+		if (collapsed || tasks.length === 0) return;
 
 		const list = sectionEl.createDiv({ cls: 'tg-task-list', attr: { id: `tg-task-list-${config.section}` } });
-		if (config.section === 'today' && routineSnapshot) this.renderRoutineArea(list, routineSnapshot, routineGroups);
 		const shouldLimit = limitEnabled && !this.expandedSections.has(config.section) && tasks.length > renderLimit;
 		const visible = shouldLimit ? tasks.slice(0, renderLimit) : tasks;
 		if (config.section === 'future') this.renderFutureGroups(list, visible);
@@ -590,7 +588,6 @@ export class TaskPanel {
 			copy.createDiv({ cls: 'tg-routine-message-title', text: '每日流程需要检查' });
 			copy.createDiv({ text: visibleDiagnostics.map((item) => item.message).join('；') });
 		}
-		this.renderYesterdayReminder(parent, snapshot);
 		for (const group of visibleGroups) {
 			const original = snapshot.groups.find((candidate) => candidate.id === group.id) ?? group;
 			this.renderRoutineGroup(parent, original, group.items);
@@ -602,6 +599,7 @@ export class TaskPanel {
 			manage.prepend(icon);
 			manage.addEventListener('click', () => this.options.routineActions?.openManager());
 		}
+		this.renderYesterdayReminder(parent, snapshot);
 	}
 
 	private renderYesterdayReminder(parent: HTMLElement, snapshot: RoutineSnapshot): void {
@@ -754,6 +752,7 @@ export class TaskPanel {
 		if (expanded) {
 			const details = row.createDiv('tg-task-inline-expanded');
 			details.createDiv({ cls: 'tg-task-inline-title', text: taskTitle(task) });
+			if (task.due) details.createDiv({ cls: 'tg-task-inline-due', text: `到期：${task.due}` });
 			details.createDiv({ cls: 'tg-task-inline-source', text: `${task.filePath} · 第 ${task.line + 1} 行` });
 			if (blockReason) details.createDiv({ cls: 'tg-task-inline-diagnostic', text: blockReason });
 		}
