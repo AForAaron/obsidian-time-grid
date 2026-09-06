@@ -48,7 +48,7 @@ export class TaskWriter {
 	 * 在收件箱新建一条任务。这是任务模块唯一「新增行」的写入路径：
 	 * 没有可定位的原文，改用唯一插槽确定位置，撞车时补 🆔 以保证之后仍可安全改写。
 	 */
-	async createTask(description: string, due: string | null): Promise<WriteResult> {
+	async createTask(description: string, due: string | null, priority: TaskPriority | null = null): Promise<WriteResult> {
 		const normalized = normalizeDescription(description);
 		if (!normalized) return { ok: false, reason: 'read-only-task', message: '任务内容不能为空' };
 
@@ -62,7 +62,12 @@ export class TaskWriter {
 			return { ok: false, reason: 'io-error', message: String(error) };
 		}
 
-		const draft = { description: normalized, due: due ?? undefined, created: getTodayKey() };
+		const draft = {
+			description: normalized,
+			due: due ?? undefined,
+			priority: priority ?? undefined,
+			created: getTodayKey(),
+		};
 		let writeResult: WriteResult = { ok: true };
 		let suppressedDelta = 0;
 		try {

@@ -28,7 +28,16 @@ import {
 	TaskFilterState,
 	TaskPriorityFilter,
 } from '../utils/taskView';
-import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer, TaskMenuAction } from '../utils/taskUi';
+import {
+	PRIORITY_CHOICES,
+	appendPriorityMenuLabel,
+	getRoutineProgress,
+	getTaskMenuActions,
+	positionFloatingLayer,
+	priorityAriaLabel,
+	TaskMenuAction,
+} from '../utils/taskUi';
+import { mountPriorityBadge } from './PriorityPicker';
 import { RoutineIndex } from '../utils/routineIndex';
 import { displayRoutineTitle } from '../utils/routineMarker';
 import { isRoutineReminderDue } from '../utils/routineReminder';
@@ -49,7 +58,7 @@ interface TaskPanelOptions {
 		updateTask: (task: TGTask, patch: TaskPatch) => Promise<WriteResult>;
 		postponeTask: (task: TGTask, days: number) => Promise<WriteResult>;
 		deleteTask: (task: TGTask) => Promise<WriteResult>;
-		createTask: (description: string, due: string | null) => Promise<WriteResult>;
+		createTask: (description: string, due: string | null, priority?: TaskPriority | null) => Promise<WriteResult>;
 	};
 	timer?: {
 		getSnapshot: () => TimerSnapshot;
@@ -82,13 +91,13 @@ const STATUS_OPTIONS: Array<{ value: TaskStatusKind; editable?: EditableTaskStat
 	{ value: 'unknown', label: '未知状态', icon: 'circle-help' },
 ];
 
-const PRIORITY_OPTIONS: Array<{ value: TaskPriorityFilter; label: string; glyph: string }> = [
-	{ value: 'highest', label: '最高', glyph: '🔺' },
-	{ value: 'high', label: '高', glyph: '⏫' },
-	{ value: 'medium', label: '中', glyph: '🔼' },
-	{ value: 'low', label: '低', glyph: '🔽' },
-	{ value: 'lowest', label: '最低', glyph: '⏬' },
-	{ value: 'none', label: '无优先级', glyph: '–' },
+const PRIORITY_FILTER_OPTIONS: Array<{ value: TaskPriorityFilter; code: string; name: string }> = [
+	...PRIORITY_CHOICES.filter((choice) => choice.value !== '').map((choice) => ({
+		value: choice.value as TaskPriorityFilter,
+		code: choice.code,
+		name: choice.name,
+	})),
+	{ value: 'none', code: '－', name: '无优先级' },
 ];
 
 export class TaskPanel {
@@ -423,12 +432,7 @@ export class TaskPanel {
 			selected: this.filters.statuses.has(option.value),
 			toggle: () => toggleSetValue(this.filters.statuses, option.value),
 		})));
-		this.renderFilterGroup(panel, '优先级', PRIORITY_OPTIONS.map((option) => ({
-			value: option.value,
-			label: `${option.glyph} ${option.label}`,
-			selected: this.filters.priorities.has(option.value),
-			toggle: () => toggleSetValue(this.filters.priorities, option.value),
-		})));
+		this.renderPriorityFilterGroup(panel);
 		const sourceGroup = panel.createDiv('tg-task-filter-group tg-task-filter-source-group');
 		sourceGroup.createDiv({ cls: 'tg-task-filter-group-title', text: '来源文件' });
 		const sources = [...new Set(tasks.map((task) => task.filePath))].sort((a, b) => a.localeCompare(b));
@@ -477,6 +481,27 @@ export class TaskPanel {
 			});
 			button.addEventListener('click', () => {
 				option.toggle();
+				this.render();
+			});
+		}
+	}
+
+	private renderPriorityFilterGroup(parent: HTMLElement): void {
+		const group = parent.createDiv('tg-task-filter-group');
+		group.createDiv({ cls: 'tg-task-filter-group-title', text: '优先级' });
+		const choices = group.createDiv('tg-task-filter-choices');
+		for (const option of PRIORITY_FILTER_OPTIONS) {
+			const selected = this.filters.priorities.has(option.value);
+			const button = choices.createEl('button', {
+				cls: `tg-task-filter-choice${selected ? ' is-selected' : ''}`,
+				attr: {
+					'aria-pressed': String(selected),
+					'aria-label': option.value === 'none' ? option.name : `${option.code} · ${option.name}`,
+				},
+			});
+			appendPriorityMenuLabel(button, option.value === 'none' ? '' : option.value);
+			button.addEventListener('click', () => {
+				toggleSetValue(this.filters.priorities, option.value);
 				this.render();
 			});
 		}
@@ -671,7 +696,7 @@ export class TaskPanel {
 		const blockReason = getTaskWriteBlockReason(task);
 		const mutationPending = this.pendingTasks.has(task.id);
 		const expanded = this.expandedTasks.has(task.id);
-		const row = parent.createDiv(`tg-task-row tg-task-status-${displayStatus} tg-task-tone-${task.section}${task.routine ? ' is-routine' : ''}`);
+		const row = parent.createDiv(`tg-task-row tg-task-status-${displayStatus} tg-task-tone-${task.section}${task.routine ? ' is-routine' : ''}${task.priority ? ` has-priority-${task.priority}` : ''}`);
 		row.setAttr('data-task-id', task.id);
 		if (blockReason) row.addClass('is-read-only');
 		if (optimisticStatus || mutationPending) row.addClass('is-pending');
@@ -727,7 +752,7 @@ export class TaskPanel {
 		statusButton.createSpan({ cls: `tg-task-status-badge is-${displayStatus}`, text: statusLabel(displayStatus, Boolean(task.routine)) });
 		statusButton.disabled = Boolean(blockReason || mutationPending || !this.options.actions);
 		statusButton.addEventListener('click', (event) => this.openStatusMenu(event, statusButton, task));
-		if (task.priority) meta.createSpan({ cls: `tg-task-priority is-${task.priority}`, text: `${priorityGlyph(task.priority)} ${priorityLabel(task.priority)}` });
+		if (task.priority) mountPriorityBadge(meta, task.priority);
 		if (task.routine?.reminderTime) {
 			const instance = this.findRoutineInstance(task);
 			const due = instance ? isRoutineReminderDue(instance, new Date(), this.options.routineIndex?.getSnapshot().today ?? getTodayKey()) : false;
@@ -782,6 +807,32 @@ export class TaskPanel {
 		this.enableMenuKeyboard(menu);
 	}
 
+	private openPriorityMenu(event: MouseEvent, anchor: HTMLElement, task: TGTask): void {
+		event.stopPropagation();
+		if (!this.options.actions || getTaskWriteBlockReason(task)) return;
+		const menu = document.body.createDiv({ cls: 'tg-task-menu tg-task-layer', attr: { role: 'menu', 'aria-label': '设置优先级' } });
+		for (const option of PRIORITY_CHOICES) {
+			const selected = option.value === ''
+				? !task.priority
+				: task.priority === option.value;
+			const item = menu.createEl('button', {
+				cls: `tg-task-menu-item is-priority${selected ? ' is-selected' : ''}`,
+				attr: { role: 'menuitemradio', 'aria-checked': String(selected), type: 'button' },
+			});
+			const label = item.createSpan('tg-task-menu-label');
+			appendPriorityMenuLabel(label, option.value);
+			const check = item.createSpan('tg-task-menu-check');
+			if (selected) setIcon(check, 'check');
+			item.addEventListener('click', () => {
+				this.removeLayer();
+				const priority = option.value === '' ? null : option.value;
+				void this.runMutation(task, () => this.options.actions!.updateTask(task, { priority }));
+			});
+		}
+		this.setLayer(menu, anchor, 'menu', 'bottom');
+		this.enableMenuKeyboard(menu);
+	}
+
 	private openMoreMenu(event: MouseEvent, anchor: HTMLElement, task: TGTask, blockReason: string | null): void {
 		event.stopPropagation();
 		if (task.routine) {
@@ -808,6 +859,10 @@ export class TaskPanel {
 			item.createSpan({ cls: 'tg-task-menu-label', text: label });
 			item.addEventListener('click', () => {
 				this.removeLayer();
+				if (action === 'set-priority') {
+					this.openPriorityMenu(event, anchor, task);
+					return;
+				}
 				this.runMenuAction(action, task, blockReason);
 			});
 		}
@@ -869,6 +924,9 @@ export class TaskPanel {
 				break;
 			case 'set-long-term':
 				if (this.options.actions) void this.runMutation(task, () => this.options.actions!.updateTask(task, { goal: true }));
+				break;
+			case 'set-priority':
+				// 由 openMoreMenu 直接打开二级菜单，不走此处
 				break;
 			case 'show-readonly-reason':
 				new Notice(blockReason ?? '这条任务当前为只读，请在源文件中处理');
@@ -958,7 +1016,13 @@ export class TaskPanel {
 		const meta = preview.createDiv('tg-task-preview-meta');
 		meta.createSpan({ cls: `tg-task-status-badge is-${task.status}`, text: statusLabel(task.status, Boolean(task.routine)) });
 		if (task.due) meta.createSpan({ text: `到期 ${task.due}` });
-		if (task.priority) meta.createSpan({ text: `${priorityGlyph(task.priority)} ${priorityLabel(task.priority)}优先级` });
+		if (task.priority) {
+			const prioritySpan = meta.createSpan({
+				cls: 'tg-task-preview-priority',
+				attr: { 'aria-label': priorityAriaLabel(task.priority) },
+			});
+			appendPriorityMenuLabel(prioritySpan, task.priority);
+		}
 		const source = preview.createDiv('tg-task-preview-source');
 		const sourceIcon = source.createSpan();
 		setIcon(sourceIcon, 'file-text');
@@ -1087,7 +1151,7 @@ export class TaskPanel {
 		if (!this.options.actions) return;
 		new TaskCreateModal(this.app, {
 			inboxPath: this.options.getSettings().inboxPath,
-			create: (description, due) => this.options.actions!.createTask(description, due),
+			create: (description, due, priority) => this.options.actions!.createTask(description, due, priority),
 		}).open();
 	}
 
@@ -1202,14 +1266,6 @@ function statusLabel(status: TaskStatusKind, routine = false): string {
 	return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? '未知';
 }
 
-function priorityGlyph(priority: TaskPriority): string {
-	return PRIORITY_OPTIONS.find((option) => option.value === priority)?.glyph ?? '';
-}
-
-function priorityLabel(priority: TaskPriority): string {
-	return PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? '';
-}
-
 function formatDue(dateKey: string): string {
 	const [, month, day] = dateKey.split('-');
 	return `${month}-${day}`;
@@ -1238,6 +1294,7 @@ function taskMenuActionConfig(action: TaskMenuAction): { label: string; icon: st
 		case 'postpone-week': return { label: '顺延一周', icon: 'calendar-range', group: 'schedule' };
 		case 'set-today': return { label: '设为今天', icon: 'sun', group: 'schedule' };
 		case 'set-long-term': return { label: '设为长期', icon: 'mountain', group: 'schedule' };
+		case 'set-priority': return { label: '设置优先级', icon: 'flag', group: 'schedule' };
 		case 'show-readonly-reason': return { label: '查看只读原因', icon: 'lock-keyhole', group: 'readonly' };
 		case 'open-source': return { label: '打开源文件', icon: 'file-text', group: 'source' };
 		case 'delete': return { label: '删除任务', icon: 'trash-2', group: 'danger', danger: true };

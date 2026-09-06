@@ -170,13 +170,15 @@ export function sortTasks(section: TaskSection, tasks: TGTask[]): TGTask[] {
 		switch (section) {
 			case 'overdue':
 			case 'future':
-				return compareOptional(a.due, b.due) || comparePathAndLine(a, b);
 			case 'today':
+				// 优先级降序优先；同优先级内 due 升序（逾期区拖得最久在前）
 				return (priorityRank(b.priority) - priorityRank(a.priority))
 					|| compareOptional(a.due, b.due)
 					|| comparePathAndLine(a, b);
 			case 'unsorted':
-				return compareOptional(b.created, a.created) || comparePathAndLine(a, b);
+				return (priorityRank(b.priority) - priorityRank(a.priority))
+					|| compareOptional(b.created, a.created)
+					|| comparePathAndLine(a, b);
 			case 'goal':
 				return comparePathAndLine(a, b);
 			case 'done':

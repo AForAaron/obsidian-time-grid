@@ -6,6 +6,9 @@
  * 并在与文件内已有行撞车时补一个 🆔，让之后所有基于「原文全局唯一」的写入仍然安全。
  */
 
+import type { TaskPriority } from '../types/task';
+import { priorityMarker } from './routineMarker';
+
 export const TASK_SLOT_START = '<!-- time-grid-task-slot:start -->';
 export const TASK_SLOT_END = '<!-- time-grid-task-slot:end -->';
 
@@ -16,6 +19,8 @@ export interface NewTaskDraft {
 	description: string;
 	/** YYYY-MM-DD；留空表示不写 📅。 */
 	due?: string;
+	/** Tasks 优先级 emoji；留空表示不写。 */
+	priority?: TaskPriority;
 	/** YYYY-MM-DD，写入 ➕ 创建日期。 */
 	created: string;
 	/** 仅在撞车时才带上，避免给每条任务都挂一串可见 ID。 */
@@ -30,7 +35,10 @@ export interface InboxMutation {
 
 export function serializeNewTaskLine(draft: NewTaskDraft): string {
 	const description = normalizeDescription(draft.description);
-	const parts = [`- [ ] ${description}`, `➕ ${draft.created}`];
+	const parts = [`- [ ] ${description}`];
+	const priority = priorityMarker(draft.priority);
+	if (priority) parts.push(priority);
+	parts.push(`➕ ${draft.created}`);
 	if (draft.due) parts.push(`📅 ${draft.due}`);
 	if (draft.id) parts.push(`🆔 ${draft.id}`);
 	return parts.join(' ');

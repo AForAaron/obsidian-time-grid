@@ -145,10 +145,31 @@ test('matches excluded paths on root-relative segment boundaries', () => {
 	assert.equal(isPathExcluded('Projects/A/Private.md', '00-Templates, Projects/A'), true);
 });
 
-test('sorts today tasks by priority descending', () => {
+test('sorts actionable sections by priority descending before secondary keys', () => {
 	const low = parseTaskLine('- [ ] 低 🔽 📅 2026-08-01', 'B.md', 0, '2026-08-01', '#goal');
 	const high = parseTaskLine('- [ ] 高 ⏫ 📅 2026-08-01', 'A.md', 0, '2026-08-01', '#goal');
 	assert.deepEqual(sortTasks('today', [low, high]).map((task) => task.description), ['高', '低']);
+
+	const overdueOlder = parseTaskLine('- [ ] 旧逾期 📅 2026-07-01', 'A.md', 0, '2026-08-01', '#goal');
+	const overdueHigh = parseTaskLine('- [ ] 高优逾期 🔺 📅 2026-07-20', 'B.md', 0, '2026-08-01', '#goal');
+	assert.deepEqual(
+		sortTasks('overdue', [overdueOlder, overdueHigh]).map((task) => task.description),
+		['高优逾期', '旧逾期']
+	);
+
+	const futureSoon = parseTaskLine('- [ ] 更近 📅 2026-08-05', 'A.md', 0, '2026-08-01', '#goal');
+	const futureHigh = parseTaskLine('- [ ] 高优未来 ⏫ 📅 2026-08-20', 'B.md', 0, '2026-08-01', '#goal');
+	assert.deepEqual(
+		sortTasks('future', [futureSoon, futureHigh]).map((task) => task.description),
+		['高优未来', '更近']
+	);
+
+	const unsortedOlder = parseTaskLine('- [ ] 更早 ➕ 2026-07-01', 'A.md', 0, '2026-08-01', '#goal');
+	const unsortedHigh = parseTaskLine('- [ ] 高优待分类 ⏫ ➕ 2026-06-01', 'B.md', 0, '2026-08-01', '#goal');
+	assert.deepEqual(
+		sortTasks('unsorted', [unsortedOlder, unsortedHigh]).map((task) => task.description),
+		['高优待分类', '更早']
+	);
 });
 
 test('serializes terminal status and normalizes missing metadata spacing', () => {
@@ -404,9 +425,9 @@ test('task menus expose only safe actions for readonly tasks', () => {
 test('task menus vary scheduling actions by task shape', () => {
 	const dated = parseTaskLine('- [ ] Dated 📅 2026-08-01', 'Daily.md', 0, '2026-08-01', '#goal');
 	const inbox = parseTaskLine('- [ ] Inbox', 'Inbox.md', 0, '2026-08-01', '#goal');
-	assert.deepEqual(getTaskMenuActions(dated, true), ['edit', 'postpone-day', 'postpone-week', 'open-source', 'delete']);
-	assert.deepEqual(getTaskMenuActions(inbox, true), ['edit', 'set-today', 'set-long-term', 'open-source', 'delete']);
-	assert.deepEqual(getTaskMenuActions(inbox, true, true), ['start-timer', 'edit', 'set-today', 'set-long-term', 'open-source', 'delete']);
+	assert.deepEqual(getTaskMenuActions(dated, true), ['edit', 'postpone-day', 'postpone-week', 'set-priority', 'open-source', 'delete']);
+	assert.deepEqual(getTaskMenuActions(inbox, true), ['edit', 'set-today', 'set-long-term', 'set-priority', 'open-source', 'delete']);
+	assert.deepEqual(getTaskMenuActions(inbox, true, true), ['start-timer', 'edit', 'set-today', 'set-long-term', 'set-priority', 'open-source', 'delete']);
 });
 
 test('task timer eligibility excludes terminal and unknown states', () => {
@@ -727,6 +748,56 @@ test('task card style contract matches the compact Claude design', () => {
 	assert.match(css, /@media \(hover: none\), \(pointer: coarse\)[\s\S]*?\.tg-task-status-control \{[\s\S]*?min-width:\s*44px(?:\s*!important)?;[\s\S]*?min-height:\s*44px(?:\s*!important)?;/);
 });
 
+test('priority visual contract uses colored P1–P5 capsules', () => {
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	const source = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	const taskUi = readFileSync(resolve('src/utils/taskUi.ts'), 'utf8');
+	const picker = readFileSync(resolve('src/components/PriorityPicker.ts'), 'utf8');
+	const editModal = readFileSync(resolve('src/components/TaskEditModal.ts'), 'utf8');
+	const createModal = readFileSync(resolve('src/components/TaskCreateModal.ts'), 'utf8');
+
+	assert.match(taskUi, /priorityCode/);
+	assert.match(taskUi, /priorityLevelClass/);
+	assert.match(taskUi, /appendPriorityMenuLabel/);
+	assert.match(taskUi, /PRIORITY_CHOICES/);
+	assert.match(taskUi, /code: 'P1'/);
+	assert.match(taskUi, /code: 'P5'/);
+
+	assert.match(css, /--tg-priority-p1:\s*color-mix/);
+	assert.match(css, /--tg-priority-p2:\s*color-mix/);
+	assert.match(css, /--tg-priority-p3:\s*color-mix/);
+	assert.match(css, /--tg-priority-p4:\s*color-mix/);
+	assert.match(css, /--tg-priority-p5:\s*var\(--text-muted\)/);
+	assert.match(css, /\.tg-priority-code\.is-p1 \{[\s\S]*?color:\s*var\(--tg-priority-p1\)/);
+	assert.match(css, /\.tg-priority-code\.is-p2 \{[\s\S]*?color:\s*var\(--tg-priority-p2\)/);
+	assert.match(css, /\.tg-priority-name \{[\s\S]*?color:\s*var\(--text-muted\)/);
+	assert.match(css, /\.tg-task-priority\.is-p1[\s\S]*?background:\s*color-mix/);
+	assert.match(css, /\.tg-task-priority\.is-p2[\s\S]*?background:\s*color-mix/);
+	assert.match(css, /\.tg-task-row\.has-priority-highest::before \{[\s\S]*?width:\s*4px/);
+	assert.match(css, /\.tg-task-row\.has-priority-high::before \{[\s\S]*?width:\s*3\.5px/);
+	assert.match(css, /\.tg-task-tone-overdue\.has-priority-highest::before \{[\s\S]*?background:\s*var\(--tg-task-overdue\)/);
+	assert.match(css, /\.tg-priority-picker/);
+	assert.match(css, /\.tg-task-menu-item\.is-selected \{[\s\S]*?interactive-accent/);
+	// 窄面板永不整颗隐藏徽章
+	assert.doesNotMatch(css, /\.tg-task-priority,[\s\S]{0,80}?display:\s*none/);
+	assert.doesNotMatch(css, /\.tg-task-priority \.tg-task-priority-text \{[\s\S]*?display:\s*none/);
+
+	assert.match(source, /mountPriorityBadge/);
+	assert.match(source, /appendPriorityMenuLabel/);
+	assert.match(source, /openPriorityMenu/);
+	assert.match(source, /PRIORITY_CHOICES/);
+	assert.doesNotMatch(source, /PRIORITY_ICONS/);
+	assert.doesNotMatch(source, /tg-task-priority-icon/);
+	assert.doesNotMatch(source, /tg-task-priority-text/);
+	assert.doesNotMatch(source, /label: '[🔺⏫🔼🔽⏬]'/);
+	assert.doesNotMatch(editModal, /createEl\('select'/);
+	assert.doesNotMatch(createModal, /createEl\('select'/);
+	assert.match(editModal, /mountPriorityPicker/);
+	assert.match(createModal, /mountPriorityPicker/);
+	assert.match(picker, /mountPriorityPicker/);
+	assert.match(picker, /tg-priority-code/);
+});
+
 test('timer block insertion prefers the unique template slot and preserves CRLF BOM', () => {
 	const source = `\uFEFF# Daily\r\n${TIMER_SLOT_START}\r\n${TIMER_SLOT_END}\r\n尾部\r\n`;
 	const inserted = ensureTrackerBlock(source);
@@ -1027,6 +1098,11 @@ test('new task lines follow the Tasks emoji format', () => {
 		serializeNewTaskLine({ description: '写周报', created: '2026-09-03' }),
 		'- [ ] 写周报 ➕ 2026-09-03'
 	);
+	// 优先级写在描述后、创建日之前；无优先级不写 marker
+	assert.equal(
+		serializeNewTaskLine({ description: '写周报', created: '2026-09-03', due: '2026-09-03', priority: 'high' }),
+		'- [ ] 写周报 ⏫ ➕ 2026-09-03 📅 2026-09-03'
+	);
 	// 🆔 只在需要时出现，且排在最后
 	assert.equal(
 		serializeNewTaskLine({ description: '写周报', created: '2026-09-03', due: '2026-09-03', id: 'ab12cd' }),
@@ -1144,6 +1220,10 @@ test('task creation UI contracts', () => {
 	// 默认到期日是今天，且可清除
 	assert.match(modal, /due = getTodayKey\(\)/);
 	assert.match(modal, /'清除'/);
+	// 新建可选优先级（自绘分色 P 码），默认「无」
+	assert.match(modal, /mountPriorityPicker/);
+	assert.match(modal, /priority \|\| null/);
+	assert.match(writer, /priority:\s*priority \?\? undefined/);
 	// 新建同样走 Vault.process 并扣除写作统计
 	assert.match(writer, /vault\.process/);
 	assert.match(writer, /addTaskWriteSuppression/);

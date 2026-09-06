@@ -3,6 +3,7 @@ import { TaskPatch, TaskPriority, TaskSettings, TGTask, WriteResult } from '../t
 import { getTodayKey } from '../utils/taskParser';
 import { getTaskWriteBlockReason } from '../utils/taskWriter';
 import { TaskDeleteConfirmModal } from './TaskDeleteConfirmModal';
+import { mountPriorityPicker, PriorityPickerHandle } from './PriorityPicker';
 
 interface TaskEditModalOptions {
 	getSettings: () => TaskSettings;
@@ -12,21 +13,12 @@ interface TaskEditModalOptions {
 	openSource: () => Promise<void>;
 }
 
-const PRIORITIES: Array<{ value: TaskPriority | ''; label: string }> = [
-	{ value: '', label: '无' },
-	{ value: 'highest', label: '🔺 最高' },
-	{ value: 'high', label: '⏫ 高' },
-	{ value: 'medium', label: '🔼 中' },
-	{ value: 'low', label: '🔽 低' },
-	{ value: 'lowest', label: '⏬ 最低' },
-];
-
 export class TaskEditModal extends Modal {
 	private task: TGTask;
 	private options: TaskEditModalOptions;
 	private descriptionInput: HTMLTextAreaElement | null = null;
 	private dueInput: HTMLInputElement | null = null;
-	private priorityInput: HTMLSelectElement | null = null;
+	private priorityPicker: PriorityPickerHandle | null = null;
 	private goalInput: HTMLInputElement | null = null;
 	private reminderInput: HTMLInputElement | null = null;
 	private errorEl: HTMLElement | null = null;
@@ -47,6 +39,8 @@ export class TaskEditModal extends Modal {
 	}
 
 	onClose(): void {
+		this.priorityPicker?.destroy();
+		this.priorityPicker = null;
 		this.contentEl.empty();
 	}
 
@@ -86,9 +80,7 @@ export class TaskEditModal extends Modal {
 		}
 
 		const priorityField = this.createField(form, '优先级');
-		this.priorityInput = priorityField.createEl('select', { attr: { 'aria-label': '任务优先级' } });
-		for (const option of PRIORITIES) this.priorityInput.createEl('option', { value: option.value, text: option.label });
-		this.priorityInput.value = this.task.priority ?? '';
+		this.priorityPicker = mountPriorityPicker(priorityField, this.task.priority ?? '', { ariaLabel: '任务优先级' });
 
 		if (this.task.routine) {
 			const reminderField = this.createField(form, '今天提醒时间');
@@ -143,7 +135,7 @@ export class TaskEditModal extends Modal {
 	}
 
 	private async save(): Promise<void> {
-		if (!this.descriptionInput || !this.priorityInput || !this.saveButton) return;
+		if (!this.descriptionInput || !this.priorityPicker || !this.saveButton) return;
 		if (!this.task.routine && (!this.dueInput || !this.goalInput)) return;
 		const description = this.descriptionInput.value.trim();
 		if (!description) {
@@ -154,14 +146,15 @@ export class TaskEditModal extends Modal {
 		this.saveButton.disabled = true;
 		this.saveButton.setText('保存中...');
 		this.hideError();
+		const priority = (this.priorityPicker.getValue() || null) as TaskPriority | null;
 		const result = await this.options.save(this.task.routine ? {
 			description,
-			priority: (this.priorityInput.value || null) as TaskPriority | null,
+			priority,
 			routineReminderTime: this.reminderInput?.value || null,
 		} : {
 			description,
 			due: this.dueInput!.value || null,
-			priority: (this.priorityInput.value || null) as TaskPriority | null,
+			priority,
 			goal: this.goalInput!.checked,
 		});
 		if (result.ok) {

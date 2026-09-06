@@ -1,5 +1,4 @@
-import { TGTask } from '../types/task';
-import { RoutineGroupViewModel } from '../types/routine';
+import { TaskPriority, TGTask } from '../types/task';
 import { canStartTimerFromTask } from './taskTimer';
 
 export type FloatingPreference = 'bottom' | 'right';
@@ -37,9 +36,62 @@ export type TaskMenuAction =
 	| 'postpone-week'
 	| 'set-today'
 	| 'set-long-term'
+	| 'set-priority'
 	| 'show-readonly-reason'
 	| 'open-source'
 	| 'delete';
+
+export type PriorityCode = 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
+
+/** 全站唯一：P 码展示 ↔ 内部值 ↔ 中文名（落盘仍用 Tasks emoji） */
+export const PRIORITY_CHOICES: Array<{ value: TaskPriority | ''; code: string; name: string; levelClass: string }> = [
+	{ value: '', code: '－', name: '无', levelClass: 'is-p-none' },
+	{ value: 'highest', code: 'P1', name: '最高', levelClass: 'is-p1' },
+	{ value: 'high', code: 'P2', name: '高', levelClass: 'is-p2' },
+	{ value: 'medium', code: 'P3', name: '中', levelClass: 'is-p3' },
+	{ value: 'low', code: 'P4', name: '低', levelClass: 'is-p4' },
+	{ value: 'lowest', code: 'P5', name: '最低', levelClass: 'is-p5' },
+];
+
+export function priorityCode(priority: TaskPriority): PriorityCode {
+	const map: Record<TaskPriority, PriorityCode> = {
+		highest: 'P1',
+		high: 'P2',
+		medium: 'P3',
+		low: 'P4',
+		lowest: 'P5',
+	};
+	return map[priority];
+}
+
+export function priorityLevelClass(priority: TaskPriority | ''): string {
+	return PRIORITY_CHOICES.find((choice) => choice.value === priority)?.levelClass ?? 'is-p-none';
+}
+
+export function priorityName(priority: TaskPriority): string {
+	return PRIORITY_CHOICES.find((choice) => choice.value === priority)?.name ?? '';
+}
+
+export function priorityAriaLabel(priority: TaskPriority): string {
+	return `${priorityCode(priority)} · ${priorityName(priority)}`;
+}
+
+/** 卡片徽章 / 菜单项：写入分色 P 码节点 */
+export function appendPriorityCode(parent: HTMLElement, priority: TaskPriority | ''): HTMLSpanElement {
+	return parent.createSpan({
+		cls: `tg-priority-code ${priorityLevelClass(priority)}`,
+		text: priority ? priorityCode(priority) : '－',
+	});
+}
+
+/** 菜单行：彩码 + 中性中文名 */
+export function appendPriorityMenuLabel(parent: HTMLElement, priority: TaskPriority | ''): void {
+	appendPriorityCode(parent, priority);
+	parent.createSpan({
+		cls: 'tg-priority-name',
+		text: priority ? priorityName(priority) : '无',
+	});
+}
 
 export function positionFloatingLayer(
 	anchor: RectLike,
@@ -87,7 +139,7 @@ export function getTaskMenuActions(task: TGTask, writable: boolean, timerAvailab
 	actions.push('edit');
 	if (task.due) actions.push('postpone-day', 'postpone-week');
 	else if (task.section === 'unsorted') actions.push('set-today', 'set-long-term');
-	actions.push('open-source', 'delete');
+	actions.push('set-priority', 'open-source', 'delete');
 	return actions;
 }
 
