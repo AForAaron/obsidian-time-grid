@@ -339,6 +339,70 @@ test('task filters use OR within a category and AND between categories', () => {
 	assert.equal(hasActiveTaskFilters(filters), true);
 });
 
+test('quick scope filters overdue today and active without touching advanced filters', () => {
+	const tasks = [
+		parseTaskLine('- [ ] Overdue 📅 2026-07-30', 'One.md', 0, '2026-08-01', '#goal'),
+		parseTaskLine('- [ ] Today 📅 2026-08-01', 'One.md', 1, '2026-08-01', '#goal'),
+		parseTaskLine('- [ ] Future 📅 2026-08-05', 'One.md', 2, '2026-08-01', '#goal'),
+		parseTaskLine('- [x] Done ✅ 2026-08-01 📅 2026-08-01', 'One.md', 3, '2026-08-01', '#goal'),
+	];
+	const filters = createEmptyTaskFilters();
+	assert.equal(filters.quickScope, 'all');
+	assert.equal(hasActiveTaskFilters(filters), false);
+
+	filters.quickScope = 'today';
+	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.description), ['Today']);
+	assert.equal(hasActiveTaskFilters(filters), true);
+
+	filters.quickScope = 'overdue';
+	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.description), ['Overdue']);
+
+	filters.quickScope = 'active';
+	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.description), ['Overdue', 'Today', 'Future']);
+});
+
+test('task center header uses 1b stats chips and advanced filter badge', () => {
+	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	assert.match(panel, /tg-task-center-header/);
+	assert.match(panel, /tg-task-center-heading/);
+	assert.match(panel, /tg-task-stats/);
+	assert.match(panel, /tg-task-search/);
+	assert.match(panel, /tg-task-chip-row/);
+	assert.match(panel, /tg-task-filter-more/);
+	assert.match(panel, /quickScope/);
+	assert.match(panel, /countAdvancedTaskFilters/);
+	assert.match(panel, /renderSearch\(/);
+	assert.match(panel, /renderChipRow\(/);
+	assert.doesNotMatch(panel, /tg-task-stat-icon/);
+	assert.doesNotMatch(panel, /createFilterButton/);
+	assert.doesNotMatch(panel, /tg-task-controls/);
+	assert.doesNotMatch(panel, /tg-view-switcher/);
+	assert.match(css, /\.tg-task-center-header \{[\s\S]*?flex-direction:\s*column/);
+	assert.match(css, /\.tg-task-center-header \{[\s\S]*?gap:\s*var\(--tg-space-5/);
+	assert.match(css, /\.tg-task-stats \{[\s\S]*?grid-template-columns:\s*repeat\(4/);
+	assert.match(css, /\.tg-task-panel button\.tg-task-stat\.is-selected[\s\S]*?inset 0 -2px 0 0/);
+	assert.match(css, /\.tg-task-panel button\.tg-task-chip\.is-selected[\s\S]*?background:\s*var\(--tg-accent/);
+	assert.match(css, /\.tg-task-filter-more-badge/);
+	assert.match(css, /\.tg-task-panel \.tg-task-search \{[\s\S]*?background:\s*var\(--tg-surface-panel/);
+	assert.match(css, /\.tg-task-panel input\.tg-task-search-input\[type="search"\]/);
+	assert.match(panel, /removeAttribute\('title'\)/);
+	assert.match(panel, /'aria-label':\s*'搜索任务/);
+	assert.doesNotMatch(panel, /title:\s*['"]搜索任务/);
+	assert.doesNotMatch(css, /\.tg-task-controls\s*\{/);
+	assert.doesNotMatch(css, /\.tg-task-filter-button,/);
+	assert.match(panel, /QUICK_SCOPE_ORDER/);
+	assert.match(panel, /tg-task-chip-count/);
+	assert.doesNotMatch(panel, /on && chip\.scope === 'all'/);
+});
+
+test('quick scope order is all today overdue active for stats and chips', () => {
+	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	const orderBlock = panel.match(/const QUICK_SCOPE_ORDER[\s\S]*?\];/)?.[0] ?? '';
+	assert.match(orderBlock, /scope: 'all'[\s\S]*scope: 'today'[\s\S]*scope: 'overdue'[\s\S]*scope: 'active'/);
+	assert.doesNotMatch(orderBlock, /scope: 'all'[\s\S]*scope: 'overdue'[\s\S]*scope: 'today'/);
+});
+
 test('filtered section counts retain matching and total values', () => {
 	const tasks = [
 		parseTaskLine('- [ ] Today A 📅 2026-08-01', 'One.md', 0, '2026-08-01', '#goal'),
@@ -745,7 +809,35 @@ test('task card style contract matches the compact Claude design', () => {
 	assert.match(badge, /font-size:\s*11px/);
 	assert.doesNotMatch(badge, /(?:^|\n)\s*(?:width|min-width|max-width):\s*[1-9]\d*px/);
 	assert.doesNotMatch(css, /\.tg-task-status-badge\.is-(?:in-progress|done|cancelled|unknown)\s*\{[^}]*background:/);
-	assert.match(css, /@media \(hover: none\), \(pointer: coarse\)[\s\S]*?\.tg-task-status-control \{[\s\S]*?min-width:\s*44px(?:\s*!important)?;[\s\S]*?min-height:\s*44px(?:\s*!important)?;/);
+	// 触屏扩大热区，不把 status 本体撑到 44px
+	assert.match(css, /@media \(hover: none\), \(pointer: coarse\)[\s\S]*?\.tg-task-panel button\.tg-task-status-control::after \{[\s\S]*?inset:/);
+	assert.match(css, /@media \(hover: none\), \(pointer: coarse\)[\s\S]*?\.tg-task-panel button\.tg-task-status-control \{[\s\S]*?min-height:\s*0\s*!important/);
+});
+
+test('task row meta slots stay unified across ordinary and routine cards', () => {
+	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	const css = readFileSync(resolve('src/styles/main.css'), 'utf8');
+	assert.match(panel, /tg-task-meta-slot is-due/);
+	assert.match(panel, /tg-task-meta-slot is-status/);
+	assert.match(panel, /tg-task-meta-slot is-priority/);
+	assert.match(panel, /tg-task-meta-slot is-flags/);
+	assert.match(panel, /is-today-label/);
+	assert.match(panel, /filtering && tasks\.length === 0\) return/);
+	assert.match(css, /\.tg-task-meta-slot/);
+	assert.match(css, /\.tg-task-due\.is-today-label/);
+	assert.match(css, /\.tg-routine-reminder-time \{[\s\S]*?border-radius:\s*6px|\.tg-task-due,[\s\S]*?\.tg-routine-reminder-time \{[\s\S]*?border-radius:\s*6px/);
+	assert.doesNotMatch(css, /\.tg-routine-reminder-time \{[\s\S]*?border-radius:\s*999px/);
+	assert.doesNotMatch(css, /\.tg-task-row\.is-routine \{[\s\S]*?border-color:/);
+	assert.doesNotMatch(css, /\.tg-routine-item \{/);
+	assert.match(css, /\.tg-routine-group \{[\s\S]*?border:\s*1px solid var\(--tg-task-soft-border\)/);
+	assert.match(css, /\.tg-routine-summary \{[\s\S]*?min-height:\s*42px/);
+	assert.match(panel, /tg-routine-summary-bar/);
+	assert.match(panel, /tg-task-row-trailing/);
+	assert.match(panel, /tg-task-priority is-placeholder/);
+	assert.match(css, /\.tg-task-priority\.is-placeholder/);
+	assert.match(css, /\.tg-task-meta-slot\.is-priority\.is-empty/);
+	assert.match(css, /\.tg-task-row-trailing/);
+	assert.doesNotMatch(panel, /tg-routine-header/);
 });
 
 test('priority visual contract uses colored P1–P5 capsules', () => {
@@ -1297,7 +1389,7 @@ test('sticky header contract keeps both fixed zones pinned with scroll-driven se
 	assert.match(css, /\.tg-container\.is-scrolled:has\(\.tg-time-view\.is-active\) \.tg-view-header,[\s\S]*?\.tg-container\.is-scrolled \.tg-task-center-header \{/);
 	assert.match(css, /@supports not selector\(:has\(\*\)\)/);
 	// 触屏搜索框 16px 防 iOS 聚焦缩放错位
-	assert.match(css, /@media \(hover: none\), \(pointer: coarse\) \{[\s\S]*?\.tg-task-search-input \{[\s\S]*?font-size:\s*16px/);
+	assert.match(css, /@media \(hover: none\), \(pointer: coarse\) \{[\s\S]*?\.tg-task-panel \.tg-task-search-input[\s\S]*?font-size:\s*16px/);
 	// 监听挂唯一滚动容器（contentEl = .tg-container），passive，关闭时移除并清状态类
 	assert.match(view, /this\.contentEl\.addEventListener\('scroll', this\.handleContainerScroll, \{ passive: true \}\)/);
 	assert.match(view, /this\.contentEl\.removeEventListener\('scroll', this\.handleContainerScroll\)/);

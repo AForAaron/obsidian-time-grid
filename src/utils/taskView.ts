@@ -2,8 +2,13 @@ import { TaskPriority, TaskSection, TaskStatusKind, TGTask } from '../types/task
 
 export type TaskPriorityFilter = TaskPriority | 'none';
 
+/** 顶部快捷范围：全部 / 逾期 / 今天 / 活跃（非已结束） */
+export type TaskQuickScope = 'all' | 'overdue' | 'today' | 'active';
+
 export interface TaskFilterState {
 	query: string;
+	/** 统计格与 chips 共用的快捷范围 */
+	quickScope: TaskQuickScope;
 	statuses: Set<TaskStatusKind>;
 	priorities: Set<TaskPriorityFilter>;
 	sources: Set<string>;
@@ -17,19 +22,25 @@ export interface TaskFilterCounts {
 export type FutureTaskGroup = 'tomorrow' | 'next7' | 'later';
 
 export function createEmptyTaskFilters(): TaskFilterState {
-	return { query: '', statuses: new Set(), priorities: new Set(), sources: new Set() };
+	return { query: '', quickScope: 'all', statuses: new Set(), priorities: new Set(), sources: new Set() };
+}
+
+export function countAdvancedTaskFilters(filters: TaskFilterState): number {
+	return filters.statuses.size + filters.priorities.size + filters.sources.size;
 }
 
 export function hasActiveTaskFilters(filters: TaskFilterState): boolean {
 	return filters.query.trim().length > 0
-		|| filters.statuses.size > 0
-		|| filters.priorities.size > 0
-		|| filters.sources.size > 0;
+		|| filters.quickScope !== 'all'
+		|| countAdvancedTaskFilters(filters) > 0;
 }
 
 export function filterTasks(tasks: TGTask[], filters: TaskFilterState): TGTask[] {
 	const query = filters.query.trim().toLocaleLowerCase();
 	return tasks.filter((task) => {
+		if (filters.quickScope === 'overdue' && task.section !== 'overdue') return false;
+		if (filters.quickScope === 'today' && task.section !== 'today') return false;
+		if (filters.quickScope === 'active' && task.section === 'done') return false;
 		if (query) {
 			const searchable = `${task.description}\n${task.tags.join(' ')}\n${task.filePath}`.toLocaleLowerCase();
 			if (!searchable.includes(query)) return false;

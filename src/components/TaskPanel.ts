@@ -20,6 +20,7 @@ import { TaskIndex } from '../utils/taskIndex';
 import { getTodayKey, sortTasks, terminalDate } from '../utils/taskParser';
 import { getTaskWriteBlockReason } from '../utils/taskWriter';
 import {
+	countAdvancedTaskFilters,
 	countFilteredSections,
 	createEmptyTaskFilters,
 	filterTasks,
@@ -27,6 +28,7 @@ import {
 	hasActiveTaskFilters,
 	TaskFilterState,
 	TaskPriorityFilter,
+	TaskQuickScope,
 } from '../utils/taskView';
 import {
 	PRIORITY_CHOICES,
@@ -98,6 +100,20 @@ const PRIORITY_FILTER_OPTIONS: Array<{ value: TaskPriorityFilter; code: string; 
 		name: choice.name,
 	})),
 	{ value: 'none', code: '－', name: '无优先级' },
+];
+
+/** 统计格与 chips 共用顺序：全部 → 今天 → 逾期 → 活跃 */
+const QUICK_SCOPE_ORDER: Array<{
+	scope: TaskQuickScope;
+	statLabel: string;
+	chipLabel: string;
+	tone: string;
+	countKey: 'total' | 'today' | 'overdue' | 'active';
+}> = [
+	{ scope: 'all', statLabel: '总数', chipLabel: '全部', tone: 'total', countKey: 'total' },
+	{ scope: 'today', statLabel: '今天', chipLabel: '今天', tone: 'today', countKey: 'today' },
+	{ scope: 'overdue', statLabel: '逾期', chipLabel: '逾期', tone: 'overdue', countKey: 'overdue' },
+	{ scope: 'active', statLabel: '活跃', chipLabel: '活跃', tone: 'active', countKey: 'active' },
 ];
 
 export class TaskPanel {
@@ -261,6 +277,7 @@ export class TaskPanel {
 
 	private renderHeader(tasks: TGTask[], isIndexing: boolean): void {
 		const header = this.container.createDiv('tg-task-center-header');
+
 		const heading = header.createDiv('tg-task-center-heading');
 		const titleBox = heading.createDiv('tg-task-center-title-box');
 		titleBox.createEl('h2', { cls: 'tg-task-center-title', text: '任务中心' });
@@ -282,23 +299,35 @@ export class TaskPanel {
 		if (isIndexing) refresh.addClass('is-spinning');
 		refresh.addEventListener('click', () => void this.index.rebuild());
 
+		const total = tasks.length;
+		const overdue = countSection(tasks, 'overdue');
+		const today = countSection(tasks, 'today');
 		const active = tasks.filter((task) => task.section !== 'done').length;
-		const stats = [
-			{ label: '总任务', value: tasks.length, tone: 'total', icon: 'list-checks' },
-			{ label: '逾期', value: countSection(tasks, 'overdue'), tone: 'overdue', icon: 'circle-alert' },
-			{ label: '今天', value: countSection(tasks, 'today'), tone: 'today', icon: 'sun' },
-			{ label: '活跃', value: active, tone: 'active', icon: 'activity' },
-		];
+		const scope = this.filters.quickScope;
+		const counts = { total, overdue, today, active };
+
 		const statsEl = header.createDiv('tg-task-stats');
-		for (const stat of stats) {
-			const card = statsEl.createDiv(`tg-task-stat is-${stat.tone}`);
-			const icon = card.createSpan('tg-task-stat-icon');
-			setIcon(icon, stat.icon);
-			const text = card.createDiv('tg-task-stat-text');
-			text.createSpan({ cls: 'tg-task-stat-value', text: String(stat.value) });
-			text.createSpan({ cls: 'tg-task-stat-label', text: stat.label });
+		for (const [index, item] of QUICK_SCOPE_ORDER.entries()) {
+			const on = scope === item.scope;
+			const button = statsEl.createEl('button', {
+				cls: `tg-task-stat is-${item.tone}${on ? ' is-selected' : ''}`,
+				attr: {
+					type: 'button',
+					'aria-pressed': String(on),
+					title: on ? `${item.statLabel} · 已筛选，点击取消` : `只看${item.statLabel}`,
+				},
+			});
+			if (index > 0) button.addClass('has-divider');
+			button.createSpan({ cls: 'tg-task-stat-value', text: String(counts[item.countKey]) });
+			button.createSpan({ cls: 'tg-task-stat-label', text: item.statLabel });
+			button.addEventListener('click', () => {
+				this.filters.quickScope = on && item.scope !== 'all' ? 'all' : item.scope;
+				this.render();
+			});
 		}
-		this.renderSearchAndFilters(header, tasks);
+
+		this.renderSearch(header);
+		this.renderChipRow(header, tasks, counts);
 	}
 
 	private renderTimerStrip(): void {
@@ -373,55 +402,79 @@ export class TaskPanel {
 		}
 	}
 
-	private renderSearchAndFilters(parent: HTMLElement, tasks: TGTask[]): void {
-		const controls = parent.createDiv('tg-task-controls');
-		const search = controls.createDiv('tg-task-search');
-		const searchIcon = search.createSpan('tg-task-search-icon');
+	private renderSearch(parent: HTMLElement): void {
+		const search = parent.createDiv({ cls: 'tg-task-search', attr: { role: 'search' } });
+		const searchIcon = search.createSpan({ cls: 'tg-task-search-icon', attr: { 'aria-hidden': 'true' } });
 		setIcon(searchIcon, 'search');
 		const input = search.createEl('input', {
 			cls: 'tg-task-search-input',
-			attr: { type: 'search', placeholder: '搜索任务、标签或文件…', 'aria-label': '搜索任务' },
+			attr: {
+				type: 'search',
+				placeholder: '搜索任务、标签或文件…',
+				'aria-label': '搜索任务、标签或文件',
+				autocomplete: 'off',
+				spellcheck: 'false',
+			},
 		});
+		// Obsidian / 部分环境会把 aria-label 同步成 title，原生 tooltip 会挡住搜索条
+		input.removeAttribute('title');
 		input.value = this.filters.query;
 		input.addEventListener('input', () => {
 			this.filters.query = input.value;
 			this.render();
 		});
 		if (this.filters.query) {
-			const clear = search.createEl('button', { cls: 'tg-task-search-clear', attr: { 'aria-label': '清空搜索' } });
+			const clear = search.createEl('button', {
+				cls: 'tg-task-search-clear',
+				attr: { type: 'button', 'aria-label': '清空搜索' },
+			});
 			setIcon(clear, 'x');
 			clear.addEventListener('click', () => {
 				this.filters.query = '';
 				this.render();
 			});
 		}
+	}
 
-		const filterButtons = controls.createDiv('tg-task-filter-buttons');
-		const filterButton = this.createFilterButton(filterButtons, 'sliders-horizontal', '筛选', this.activeFilterCount());
-		if (hasActiveTaskFilters(this.filters)) {
-			const reset = filterButtons.createEl('button', { cls: 'tg-task-filter-reset', text: '清除', attr: { 'aria-label': '清除全部搜索和筛选' } });
-			reset.addEventListener('click', () => {
-				this.filters = createEmptyTaskFilters();
+	private renderChipRow(
+		parent: HTMLElement,
+		tasks: TGTask[],
+		counts: { total: number; overdue: number; today: number; active: number }
+	): void {
+		const chipRow = parent.createDiv('tg-task-chip-row');
+		const chips = chipRow.createDiv('tg-task-chips');
+		for (const item of QUICK_SCOPE_ORDER) {
+			const on = this.filters.quickScope === item.scope;
+			const button = chips.createEl('button', {
+				cls: `tg-task-chip${on ? ' is-selected' : ''}`,
+				attr: { type: 'button', 'aria-pressed': String(on) },
+			});
+			button.createSpan({ cls: 'tg-task-chip-label', text: item.chipLabel });
+			button.createSpan({ cls: 'tg-task-chip-count', text: String(counts[item.countKey]) });
+			button.addEventListener('click', () => {
+				this.filters.quickScope = item.scope;
 				this.render();
 			});
 		}
-		if (this.filterPanelOpen) this.renderFilterPanel(filterButton, tasks);
-	}
 
-	private createFilterButton(parent: HTMLElement, iconName: string, label: string, count: number): HTMLButtonElement {
-		const button = parent.createEl('button', {
-			cls: `tg-task-filter-button${count ? ' is-active' : ''}`,
-			attr: { 'aria-expanded': String(this.filterPanelOpen), 'aria-label': `${label}筛选${count ? `，已选 ${count} 项` : ''}` },
+		const advancedCount = countAdvancedTaskFilters(this.filters);
+		const more = chipRow.createEl('button', {
+			cls: `tg-task-filter-more${advancedCount ? ' is-active' : ''}`,
+			attr: {
+				type: 'button',
+				'aria-expanded': String(this.filterPanelOpen),
+				'aria-label': advancedCount ? `更多筛选，已选 ${advancedCount} 项` : '更多筛选',
+			},
 		});
-		const icon = button.createSpan('tg-task-filter-icon');
-		setIcon(icon, iconName);
-		button.createSpan({ cls: 'tg-task-filter-label', text: label });
-		if (count) button.createSpan({ cls: 'tg-task-filter-count', text: String(count) });
-		button.addEventListener('click', () => {
+		setIcon(more, 'list-filter');
+		if (advancedCount) {
+			more.createSpan({ cls: 'tg-task-filter-more-badge', text: String(advancedCount) });
+		}
+		more.addEventListener('click', () => {
 			this.filterPanelOpen = !this.filterPanelOpen;
 			this.render();
 		});
-		return button;
+		if (this.filterPanelOpen) this.renderFilterPanel(more, tasks);
 	}
 
 	private renderFilterPanel(anchor: HTMLElement, tasks: TGTask[]): void {
@@ -543,6 +596,9 @@ export class TaskPanel {
 		limitEnabled: boolean,
 		renderLimit: number
 	): void {
+		// 筛选中空分区整段不渲染，避免切 scope 时留下空洞 heading
+		if (filtering && tasks.length === 0) return;
+
 		const sectionEl = this.container.createDiv(`tg-task-section tg-task-section-${config.section}`);
 		const collapsed = this.isCollapsed(config.section);
 		const heading = sectionEl.createEl('button', {
@@ -651,11 +707,11 @@ export class TaskPanel {
 		const progress = getRoutineProgress(group);
 		if (!progress) return;
 		const wrapper = parent.createDiv('tg-routine-group');
-		const header = wrapper.createDiv('tg-routine-header');
 		const collapsed = this.collapsedRoutineGroups.has(group.id);
-		const summary = header.createEl('button', {
+		const bar = wrapper.createDiv('tg-routine-summary-bar');
+		const summary = bar.createEl('button', {
 			cls: 'tg-routine-summary',
-			attr: { 'aria-expanded': String(!collapsed), 'aria-controls': `tg-routine-items-${group.id}` },
+			attr: { type: 'button', 'aria-expanded': String(!collapsed), 'aria-controls': `tg-routine-items-${group.id}` },
 		});
 		const icon = summary.createSpan('tg-routine-icon');
 		setIcon(icon, 'refresh-cw');
@@ -670,7 +726,10 @@ export class TaskPanel {
 			else this.collapsedRoutineGroups.add(group.id);
 			this.render();
 		});
-		const manage = header.createEl('button', { cls: 'tg-routine-group-menu', attr: { 'aria-label': `管理组合：${group.title}`, title: '管理组合' } });
+		const manage = bar.createEl('button', {
+			cls: 'tg-routine-group-menu',
+			attr: { type: 'button', 'aria-label': `管理组合：${group.title}`, title: '管理组合' },
+		});
 		setIcon(manage, 'settings-2');
 		manage.addEventListener('click', () => this.options.routineActions?.openManager());
 		if (collapsed) return;
@@ -738,41 +797,97 @@ export class TaskPanel {
 		title.addEventListener('blur', () => this.schedulePreviewClose());
 
 		const meta = content.createDiv('tg-task-meta');
+
+		const dueSlot = meta.createSpan('tg-task-meta-slot is-due');
 		if (task.due) {
-			const due = meta.createSpan({ cls: 'tg-task-due', text: formatDue(task.due) });
+			const due = dueSlot.createSpan({ cls: 'tg-task-due', text: formatDue(task.due) });
 			const dueIcon = due.createSpan('tg-task-meta-icon');
 			setIcon(dueIcon, 'calendar');
 			due.prepend(dueIcon);
 			if (task.section === 'overdue') due.addClass('is-overdue');
+		} else if (task.routine) {
+			const due = dueSlot.createSpan({ cls: 'tg-task-due is-today-label', text: '今天' });
+			const dueIcon = due.createSpan('tg-task-meta-icon');
+			setIcon(dueIcon, 'calendar');
+			due.prepend(dueIcon);
+		} else {
+			dueSlot.addClass('is-empty');
+			dueSlot.setAttr('aria-hidden', 'true');
 		}
-		const statusButton = meta.createEl('button', {
+
+		const statusSlot = meta.createSpan('tg-task-meta-slot is-status');
+		const statusButton = statusSlot.createEl('button', {
 			cls: `tg-task-status-control is-${displayStatus}`,
-			attr: { 'aria-label': `任务状态：${statusLabel(displayStatus, Boolean(task.routine))}，点击更改`, 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
+			attr: {
+				type: 'button',
+				'aria-label': `任务状态：${statusLabel(displayStatus, Boolean(task.routine))}，点击更改`,
+				'aria-haspopup': 'menu',
+				'aria-expanded': 'false',
+			},
 		});
 		statusButton.createSpan({ cls: `tg-task-status-badge is-${displayStatus}`, text: statusLabel(displayStatus, Boolean(task.routine)) });
 		statusButton.disabled = Boolean(blockReason || mutationPending || !this.options.actions);
 		statusButton.addEventListener('click', (event) => this.openStatusMenu(event, statusButton, task));
-		if (task.priority) mountPriorityBadge(meta, task.priority);
-		if (task.routine?.reminderTime) {
-			const instance = this.findRoutineInstance(task);
-			const due = instance ? isRoutineReminderDue(instance, new Date(), this.options.routineIndex?.getSnapshot().today ?? getTodayKey()) : false;
-			meta.createSpan({ cls: `tg-routine-reminder-time${due ? ' is-due' : ''}`, text: due ? `已到时间 · ${task.routine.reminderTime}` : task.routine.reminderTime });
-		}
-		if (task.routine?.todayOnly) meta.createSpan({ cls: 'tg-task-readonly-badge', text: '仅今天' });
-		if (this.options.getSettings().showFileName) meta.createSpan({ cls: 'tg-task-file', text: fileName(task.filePath), attr: { title: task.filePath } });
-		if (task.hasRecurrence) meta.createSpan({ cls: 'tg-task-readonly-badge', text: '循环 · 只读' });
-		else if (blockReason) meta.createSpan({ cls: 'tg-task-readonly-badge', text: '只读' });
 
-		const more = main.createEl('button', { cls: 'tg-task-more-button', attr: { 'aria-label': '更多任务操作', 'aria-haspopup': 'menu', 'aria-expanded': 'false' } });
+		const prioritySlot = meta.createSpan('tg-task-meta-slot is-priority');
+		if (task.priority) mountPriorityBadge(prioritySlot, task.priority);
+		else {
+			prioritySlot.addClass('is-empty');
+			prioritySlot.setAttr('aria-hidden', 'true');
+			// 预留与 P 胶囊同规格的空位，不显示文案
+			prioritySlot.createSpan({ cls: 'tg-task-priority is-placeholder', text: 'P0' });
+		}
+
+		const flagsSlot = meta.createSpan('tg-task-meta-slot is-flags');
+		let hasFlags = false;
+		if (task.routine?.reminderTime) {
+			hasFlags = true;
+			const instance = this.findRoutineInstance(task);
+			const reminderDue = instance
+				? isRoutineReminderDue(instance, new Date(), this.options.routineIndex?.getSnapshot().today ?? getTodayKey())
+				: false;
+			flagsSlot.createSpan({
+				cls: `tg-routine-reminder-time${reminderDue ? ' is-due' : ''}`,
+				text: reminderDue ? `已到时间 · ${task.routine.reminderTime}` : task.routine.reminderTime,
+			});
+		}
+		if (task.routine?.todayOnly) {
+			hasFlags = true;
+			flagsSlot.createSpan({ cls: 'tg-task-readonly-badge', text: '仅今天' });
+		}
+		if (this.options.getSettings().showFileName) {
+			hasFlags = true;
+			flagsSlot.createSpan({ cls: 'tg-task-file', text: fileName(task.filePath), attr: { title: task.filePath } });
+		}
+		if (task.hasRecurrence) {
+			hasFlags = true;
+			flagsSlot.createSpan({ cls: 'tg-task-readonly-badge', text: '循环 · 只读' });
+		} else if (blockReason) {
+			hasFlags = true;
+			flagsSlot.createSpan({ cls: 'tg-task-readonly-badge', text: '只读' });
+		}
+		if (!hasFlags) {
+			flagsSlot.addClass('is-empty');
+			flagsSlot.setAttr('aria-hidden', 'true');
+		}
+
+		const trailing = main.createDiv('tg-task-row-trailing');
+		const quickActions = trailing.createDiv('tg-task-row-quick');
+		if (!blockReason && this.options.actions) {
+			this.createIconAction(quickActions, 'pencil', task.routine ? '编辑今天' : '编辑任务', () => this.openEditor(task));
+			if (!task.routine && task.due) {
+				this.createIconAction(quickActions, 'calendar-plus', '顺延一天；按住 Shift 顺延一周', (event) =>
+					this.runMutation(task, () => this.options.actions!.postponeTask(task, event.shiftKey ? 7 : 1)));
+			}
+		} else {
+			quickActions.addClass('is-empty');
+		}
+		const more = trailing.createEl('button', {
+			cls: 'tg-task-more-button',
+			attr: { type: 'button', 'aria-label': '更多任务操作', 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
+		});
 		setIcon(more, 'ellipsis');
 		more.addEventListener('click', (event) => this.openMoreMenu(event, more, task, blockReason));
-
-		if (!blockReason && this.options.actions) {
-			const hoverActions = row.createDiv('tg-task-hover-actions');
-			this.createIconAction(hoverActions, 'pencil', task.routine ? '编辑今天' : '编辑任务', () => this.openEditor(task));
-			if (!task.routine && task.due) this.createIconAction(hoverActions, 'calendar-plus', '顺延一天；按住 Shift 顺延一周', (event) =>
-				this.runMutation(task, () => this.options.actions!.postponeTask(task, event.shiftKey ? 7 : 1)));
-		}
 
 		if (expanded) {
 			const details = row.createDiv('tg-task-inline-expanded');
@@ -1195,7 +1310,7 @@ export class TaskPanel {
 	}
 
 	private activeFilterCount(): number {
-		return this.filters.statuses.size + this.filters.priorities.size + this.filters.sources.size;
+		return countAdvancedTaskFilters(this.filters);
 	}
 
 	private findRoutineInstance(task: TGTask): RoutineInstance | undefined {

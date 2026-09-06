@@ -102,7 +102,7 @@
 	background: var(--tg-surface-sunken);
 }
 
-/* 一级 · 主导航：选中 = accent 边 + 淡紫填充（与二级分段同一「紫色 = 选中」语言，仅填充更重；不再用凹陷/凸起按压隐喻） */
+/* 一级 · 主导航：选中 = accent 边 + 淡紫填充 + 字重 600（与 1b 稿一致；分段容器仍共用外框） */
 .tg-view-switcher-button {
 	appearance: none;
 	display: inline-flex;
@@ -119,7 +119,7 @@
 	box-shadow: none;
 	color: var(--tg-muted);
 	font-size: var(--tg-btn-font, 12px);
-	font-weight: 600;
+	font-weight: 500;
 	cursor: pointer;
 	transition: background-color var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, border-color var(--tg-duration-fast) ease, box-shadow var(--tg-duration-fast) ease;
 }
@@ -131,8 +131,9 @@
 
 .tg-view-switcher-button.is-active {
 	border-color: var(--tg-nav-active-border, var(--tg-accent, var(--interactive-accent)));
-	background: var(--tg-nav-active-bg, color-mix(in srgb, var(--tg-accent, var(--interactive-accent)) 17%, transparent));
+	background: var(--tg-nav-active-bg, color-mix(in srgb, var(--tg-accent, var(--interactive-accent)) 16%, transparent));
 	color: var(--tg-text);
+	font-weight: 600;
 }
 
 .tg-view-switcher-button:focus-visible {
@@ -942,7 +943,10 @@
 
 .tg-task-center-header {
 	position: relative;
-	margin-bottom: 15px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--tg-space-5, 12px);
+	margin-bottom: var(--tg-space-5, 12px);
 }
 
 /* ── Sticky 固定区增量（Claude Code sticky header 方案整合） ────────────────
@@ -1115,11 +1119,14 @@
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
-	gap: 10px;
-	padding: 3px 2px 12px;
+	gap: var(--tg-space-4, 8px);
+	padding: 0 2px;
 }
 
 .tg-task-center-title-box {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 	min-width: 0;
 }
 
@@ -1127,27 +1134,27 @@
 	display: flex;
 	align-items: center;
 	flex: 0 0 auto;
-	gap: 4px;
+	gap: var(--tg-space-3, 6px);
 }
 
 .tg-task-center-title {
 	margin: 0;
-	font-size: 17px;
+	font-size: var(--tg-text-lg, 16px);
 	line-height: 1.3;
-	font-weight: 720;
+	font-weight: 600;
 	letter-spacing: -0.01em;
 	color: var(--tg-text);
 }
 
 .tg-task-center-subtitle {
-	margin-top: 2px;
-	font-size: 10.5px;
+	font-size: var(--tg-text-xs, 11px);
 	line-height: 1.4;
-	color: var(--text-faint);
+	color: var(--tg-text-faint, var(--text-faint));
 }
 
-.tg-task-icon-button,
-/* 图标按钮（三级 · ghost）统一由 Design System 3 的 .tg-btn--ghost 别名层提供外观。 */
+.tg-task-icon-button {
+	/* 外观由 Design System ghost 别名层提供；此处仅作挂载点。 */
+}
 
 .tg-task-panel button {
 	appearance: none !important;
@@ -1159,7 +1166,9 @@
 .tg-task-description:focus-visible,
 .tg-task-status-control:focus-visible,
 .tg-task-section-heading:focus-visible,
-.tg-task-filter-button:focus-visible,
+.tg-task-filter-more:focus-visible,
+.tg-task-chip:focus-visible,
+.tg-task-stat:focus-visible,
 .tg-task-filter-choice:focus-visible,
 .tg-task-source-option:focus-visible {
 	outline: 2px solid color-mix(in srgb, var(--interactive-accent) 72%, transparent);
@@ -1176,149 +1185,272 @@
 	to { transform: rotate(360deg); }
 }
 
+/* 四格一体分段条：共用边框 + 竖分割线；选中 = 淡紫底 + 底部 2px accent */
 .tg-task-stats {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 7px;
-	margin-bottom: 10px;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	border: 1px solid var(--tg-border-default, var(--tg-task-soft-border));
+	border-radius: var(--tg-panel-radius, var(--tg-radius-md));
+	background: var(--tg-surface-panel, var(--tg-task-card));
+	overflow: hidden;
 }
 
-.tg-task-stat {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-width: 0;
-	min-height: 48px;
-	padding: 8px 9px;
-	border: 1px solid var(--tg-task-soft-border);
-	border-radius: var(--tg-radius-md);
-	background: var(--tg-task-card);
-	box-shadow: none;
-}
-
-.tg-task-stat-icon {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 25px;
-	height: 25px;
-	flex: 0 0 25px;
-	border-radius: 7px;
-	background: color-mix(in srgb, var(--text-muted) 10%, transparent);
-	color: var(--tg-muted);
-}
-
-.tg-task-stat-icon svg {
-	width: 13px;
-	height: 13px;
-}
-
-.tg-task-stat.is-overdue .tg-task-stat-icon {
-	background: color-mix(in srgb, var(--tg-task-overdue) 12%, transparent);
-	color: var(--tg-task-overdue);
-}
-
-.tg-task-stat.is-today .tg-task-stat-icon {
-	background: color-mix(in srgb, var(--tg-task-today) 13%, transparent);
-	color: var(--tg-task-today);
-}
-
-.tg-task-stat.is-active .tg-task-stat-icon {
-	background: color-mix(in srgb, var(--tg-task-done) 12%, transparent);
-	color: var(--tg-task-done);
-}
-
-.tg-task-stat-text {
+.tg-task-panel button.tg-task-stat {
+	appearance: none !important;
 	display: flex;
 	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 1px;
 	min-width: 0;
+	min-height: 48px;
+	margin: 0;
+	padding: var(--tg-space-4, 8px) var(--tg-space-2, 4px);
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text);
+	font: inherit;
+	cursor: pointer;
+	transition: background var(--tg-duration-fast) ease;
+}
+
+.tg-task-stat.has-divider {
+	border-left: 1px solid var(--tg-border-subtle);
+}
+
+.tg-task-panel button.tg-task-stat:hover {
+	background: var(--tg-surface-hover);
+}
+
+.tg-task-panel button.tg-task-stat.is-selected {
+	background: color-mix(in srgb, var(--tg-accent, var(--interactive-accent)) 18%, transparent);
+	box-shadow: inset 0 -2px 0 0 var(--tg-accent, var(--interactive-accent));
 }
 
 .tg-task-stat-value {
-	font-size: 16px;
-	line-height: 1.05;
-	font-weight: 720;
+	font-family: var(--font-monospace);
+	font-size: var(--tg-text-base, 13px);
+	font-weight: 700;
 	font-variant-numeric: tabular-nums;
-	color: var(--tg-text);
+	line-height: 1.2;
 }
+
+.tg-task-stat.is-total .tg-task-stat-value { color: var(--tg-text-primary, var(--tg-text)); }
+.tg-task-stat.is-overdue .tg-task-stat-value { color: var(--tg-status-overdue, var(--tg-task-overdue)); }
+.tg-task-stat.is-today .tg-task-stat-value { color: var(--tg-accent-strong); }
+.tg-task-stat.is-active .tg-task-stat-value { color: var(--tg-status-done, var(--tg-task-done)); }
 
 .tg-task-stat-label {
-	margin-top: 2px;
-	font-size: 11px;
+	font-size: var(--tg-text-xs, 11px);
 	line-height: 1.2;
-	color: var(--tg-muted);
+	color: var(--tg-text-muted, var(--tg-muted));
+	font-weight: 400;
 }
 
-.tg-task-controls {
-	display: flex;
-	flex-direction: column;
-	gap: 7px;
+.tg-task-stat.is-selected .tg-task-stat-label {
+	color: var(--tg-text-primary, var(--tg-text));
+	font-weight: 600;
 }
 
-.tg-task-search {
-	position: relative;
+/* 一体式搜索条（对齐 1b）：外层唯一边框/底；input 透明，压住 Obsidian 默认 form-field */
+.tg-task-panel .tg-task-search {
 	display: flex;
 	align-items: center;
-	min-width: 0;
+	gap: var(--tg-space-3, 6px);
+	box-sizing: border-box;
+	min-height: var(--tg-nav-h, 36px);
+	height: var(--tg-nav-h, 36px);
+	padding: 0 var(--tg-space-5, 12px);
+	border: 1px solid var(--tg-border-default, var(--tg-task-soft-border));
+	border-radius: var(--tg-panel-radius, var(--tg-radius-md));
+	background: var(--tg-surface-panel, var(--tg-task-card));
+	box-shadow: none;
 }
 
-.tg-task-search-icon {
-	position: absolute;
-	left: 10px;
-	z-index: 1;
+.tg-task-panel .tg-task-search:focus-within {
+	border-color: var(--tg-accent-strong, color-mix(in srgb, var(--interactive-accent) 55%, var(--tg-task-soft-border)));
+	box-shadow: none;
+}
+
+.tg-task-panel .tg-task-search-icon {
 	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	color: var(--tg-text-faint, var(--text-faint));
 	pointer-events: none;
-	color: var(--text-faint);
 }
 
-.tg-task-search-icon svg {
+.tg-task-panel .tg-task-search-icon svg {
 	width: 14px;
 	height: 14px;
 }
 
-.tg-task-search-input {
-	width: 100%;
-	height: 36px;
+.tg-task-panel .tg-task-search-input,
+.tg-task-panel input.tg-task-search-input[type="search"] {
+	appearance: none;
+	-webkit-appearance: none;
+	flex: 1 1 auto;
 	min-width: 0;
-	padding: 0 34px 0 32px;
-	border: 1px solid var(--tg-task-soft-border);
-	border-radius: var(--tg-radius-md);
-	background: var(--tg-task-card);
+	width: auto;
+	height: auto;
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	outline: none;
+	background: transparent;
 	box-shadow: none;
-	color: var(--tg-text);
-	font-size: 12px;
+	color: var(--tg-text-primary, var(--tg-text));
+	font: inherit;
+	font-size: var(--tg-text-sm, 12px);
+	line-height: 1.3;
 }
 
-.tg-task-search-input:focus {
-	border-color: color-mix(in srgb, var(--interactive-accent) 62%, var(--tg-task-soft-border));
-	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 13%, transparent);
+.tg-task-panel .tg-task-search-input:hover,
+.tg-task-panel .tg-task-search-input:focus,
+.tg-task-panel .tg-task-search-input:focus-visible,
+.tg-task-panel input.tg-task-search-input[type="search"]:hover,
+.tg-task-panel input.tg-task-search-input[type="search"]:focus,
+.tg-task-panel input.tg-task-search-input[type="search"]:focus-visible {
+	border: none;
+	outline: none;
+	background: transparent;
+	box-shadow: none;
 }
 
-.tg-task-search-clear {
-	position: absolute;
-	right: 5px;
-}
-
-.tg-task-search-clear svg {
-	width: 13px;
-	height: 13px;
-}
-
-.tg-task-filter-buttons {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	min-width: 0;
-	overflow: visible;
-	scrollbar-width: none;
-}
-
-.tg-task-filter-buttons::-webkit-scrollbar {
+.tg-task-panel input.tg-task-search-input[type="search"]::-webkit-search-decoration,
+.tg-task-panel input.tg-task-search-input[type="search"]::-webkit-search-cancel-button,
+.tg-task-panel input.tg-task-search-input[type="search"]::-webkit-search-results-button,
+.tg-task-panel input.tg-task-search-input[type="search"]::-webkit-search-results-decoration {
+	-webkit-appearance: none;
+	appearance: none;
 	display: none;
 }
 
-.tg-task-filter-button,
-/* 分段/选项按钮统一并入二级 accent 语言（对齐 .tg-segmented token）；此处保留各控件的行/方角形态。 */
+.tg-task-panel .tg-task-search-clear {
+	flex: 0 0 auto;
+}
+
+.tg-task-panel .tg-task-search-clear svg {
+	width: 14px;
+	height: 14px;
+}
+
+.tg-task-chip-row {
+	display: flex;
+	align-items: center;
+	gap: var(--tg-space-3, 6px);
+	min-width: 0;
+}
+
+.tg-task-chips {
+	display: flex;
+	gap: var(--tg-space-3, 6px);
+	flex: 1;
+	min-width: 0;
+	overflow-x: auto;
+	padding-bottom: 2px;
+	scrollbar-width: none;
+}
+
+.tg-task-chips::-webkit-scrollbar {
+	display: none;
+}
+
+.tg-task-panel button.tg-task-chip {
+	appearance: none !important;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--tg-space-2, 4px);
+	flex: 0 0 auto;
+	min-height: 26px;
+	margin: 0;
+	padding: var(--tg-space-2, 4px) var(--tg-space-5, 12px);
+	border: 1px solid var(--tg-border-default);
+	border-radius: var(--tg-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text-muted, var(--tg-muted));
+	font: inherit;
+	font-size: var(--tg-text-xs, 11px);
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background var(--tg-duration-fast) ease, color var(--tg-duration-fast) ease, border-color var(--tg-duration-fast) ease;
+}
+
+.tg-task-panel button.tg-task-chip:hover {
+	background: var(--tg-surface-hover);
+}
+
+/* chips 选中：实心 accent（与统计格淡紫底区分层级） */
+.tg-task-panel button.tg-task-chip.is-selected {
+	border-color: var(--tg-accent, var(--interactive-accent));
+	background: var(--tg-accent, var(--interactive-accent));
+	color: var(--text-on-accent, #fff);
+	font-weight: 600;
+}
+
+.tg-task-chip-count {
+	font-family: var(--font-monospace);
+	font-variant-numeric: tabular-nums;
+	opacity: 0.9;
+}
+
+.tg-task-panel button.tg-task-chip.is-selected .tg-task-chip-count {
+	opacity: 1;
+}
+
+.tg-task-panel button.tg-task-filter-more {
+	appearance: none !important;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	flex: 0 0 auto;
+	margin: 0;
+	padding: 0;
+	border: 1px solid var(--tg-border-default);
+	border-radius: var(--tg-cell-radius, var(--tg-radius-sm));
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-text-muted, var(--tg-muted));
+	cursor: pointer;
+}
+
+.tg-task-panel button.tg-task-filter-more:hover,
+.tg-task-panel button.tg-task-filter-more.is-active {
+	background: var(--tg-surface-hover);
+	color: var(--tg-text-primary, var(--tg-text));
+}
+
+.tg-task-panel button.tg-task-filter-more svg {
+	width: 14px;
+	height: 14px;
+}
+
+.tg-task-filter-more-badge {
+	position: absolute;
+	top: -3px;
+	right: -3px;
+	min-width: 13px;
+	height: 13px;
+	padding: 0 3px;
+	border-radius: var(--tg-radius-pill);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent, var(--background-primary));
+	font-size: 10px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	line-height: 13px;
+	text-align: center;
+}
+
 .tg-task-filter-reset,
 .tg-task-filter-choice,
 .tg-task-source-option,
@@ -1332,21 +1464,6 @@
 	cursor: pointer;
 }
 
-.tg-task-filter-button {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 5px;
-	min-width: max-content;
-	height: 30px;
-	margin: 0;
-	padding: 0 8px;
-	border-radius: var(--tg-radius-md);
-	font-size: 12px;
-}
-
-.tg-task-filter-button:hover,
-.tg-task-filter-button.is-active,
 .tg-task-filter-choice:hover,
 .tg-task-filter-choice.is-selected,
 .tg-task-source-option:hover,
@@ -1354,26 +1471,6 @@
 	border-color: var(--tg-accent);
 	background: color-mix(in srgb, var(--tg-accent) 13%, transparent);
 	color: var(--tg-text-primary);
-}
-
-.tg-task-filter-icon,
-.tg-task-filter-icon svg {
-	display: inline-flex;
-	width: 12px;
-	height: 12px;
-}
-
-.tg-task-filter-count {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 16px;
-	height: 16px;
-	padding: 0 4px;
-	border-radius: 999px;
-	background: color-mix(in srgb, var(--interactive-accent) 18%, transparent);
-	font-size: 9px;
-	font-weight: 700;
 }
 
 /* 清除/空态按钮（三级 · 淡底次操作） */
@@ -1799,10 +1896,32 @@
 
 .tg-task-row-main {
 	display: grid;
-	grid-template-columns: 26px minmax(0, 1fr) 26px;
+	grid-template-columns: 26px minmax(0, 1fr) auto;
 	align-items: start;
 	gap: 8px;
 	min-width: 0;
+}
+
+.tg-task-row-trailing {
+	display: flex;
+	align-items: flex-start;
+	gap: 2px;
+	flex: 0 0 auto;
+	min-width: 52px;
+	min-height: 26px;
+}
+
+.tg-task-row-quick {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 26px;
+	min-height: 26px;
+}
+
+.tg-task-row-quick.is-empty {
+	visibility: hidden;
+	pointer-events: none;
 }
 
 .tg-task-checkbox {
@@ -1884,12 +2003,14 @@
 	text-decoration-color: var(--text-faint);
 }
 
-/* 任务卡行内操作按钮：ghost 行为由别名层提供，此处仅保留几何尺寸。 */.tg-task-meta {
+/* 任务卡 meta：固定 slot，缺失不拆结构 */
+.tg-task-meta {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 6px;
 	min-width: 0;
+	min-height: 19px;
 	margin-top: 6px;
 	font-size: 11px;
 	line-height: 1.3;
@@ -1897,10 +2018,49 @@
 	color: var(--tg-muted);
 }
 
+.tg-task-meta-slot {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 19px;
+	min-width: 0;
+}
+
+.tg-task-meta-slot.is-empty:not(.is-priority) {
+	width: 0;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* 无优先级时仍占 P 胶囊位，规格对齐逾期卡 */
+.tg-task-meta-slot.is-priority {
+	min-width: 28px;
+	justify-content: flex-start;
+}
+
+.tg-task-meta-slot.is-priority.is-empty {
+	width: auto;
+	min-width: 28px;
+	opacity: 1;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.tg-task-priority.is-placeholder {
+	visibility: hidden;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
 .tg-task-due,
 .tg-task-priority,
 .tg-task-file,
-.tg-task-readonly-badge {
+.tg-task-readonly-badge,
+.tg-routine-reminder-time {
 	display: inline-flex;
 	align-items: center;
 	gap: 3px;
@@ -1921,6 +2081,11 @@
 	background: color-mix(in srgb, var(--tg-task-overdue) 10%, transparent);
 	color: var(--tg-task-overdue);
 	font-weight: 650;
+}
+
+.tg-task-due.is-today-label {
+	color: var(--tg-task-today);
+	background: color-mix(in srgb, var(--tg-task-today) 10%, transparent);
 }
 
 /* 优先级彩底胶囊（C1）：仅短码 P1–P5，窄栏亦不隐藏 */
@@ -2199,34 +2364,13 @@
 }
 
 .tg-task-hover-actions {
-	position: absolute;
-	right: 38px;
-	top: 6px;
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	padding: 2px;
-	border: 1px solid var(--tg-task-soft-border);
-	border-radius: 7px;
-	background: var(--background-primary);
-	opacity: 0;
-	pointer-events: none;
-	transform: translateY(-2px);
-	transition: opacity 120ms ease, transform 120ms ease;
+	/* 旧浮动编辑条已并入 .tg-task-row-trailing；保留选择器以免外部引用报错 */
+	display: none;
 }
-
-/* 任务卡行内 ghost 尺寸统一由别名层提供。 */
 
 @media (hover: hover) and (pointer: fine) {
 	.tg-task-description {
-		padding-right: 62px;
-	}
-
-	.tg-task-row:hover .tg-task-hover-actions,
-	.tg-task-row:focus-within .tg-task-hover-actions {
-		opacity: 1;
-		pointer-events: auto;
-		transform: translateY(0);
+		padding-right: 0;
 	}
 }
 
@@ -2392,9 +2536,17 @@
 
 .tg-routine-group {
 	overflow: hidden;
-	border: 1px solid color-mix(in srgb, var(--tg-task-today) 32%, var(--tg-task-soft-border));
+	border: 1px solid var(--tg-task-soft-border);
 	border-radius: var(--tg-radius-md);
-	background: color-mix(in srgb, var(--tg-task-today) 5%, var(--tg-task-card));
+	background: var(--tg-task-card);
+}
+
+.tg-routine-summary-bar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 42px;
+	padding-right: 6px;
 }
 
 .tg-routine-summary {
@@ -2402,10 +2554,11 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	width: 100%;
-	min-height: 48px;
+	flex: 1;
+	min-width: 0;
+	min-height: 42px;
 	margin: 0;
-	padding: 8px 10px;
+	padding: 7px 9px;
 	border: 0;
 	background: transparent;
 	box-shadow: none;
@@ -2470,18 +2623,14 @@
 .tg-routine-items {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
-	padding: 4px 8px 8px;
+	gap: 5px;
+	padding: 0 8px 8px;
 }
 
 .tg-routine-header {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) 34px;
-	align-items: center;
-	gap: 2px;
+	display: block;
 }
 
-/* 流程卡片/消息条按钮统一并入分级按钮（三级 · 次操作/主操作）。 */
 .tg-routine-group-menu,
 .tg-routine-manage-button,
 .tg-routine-message > button,
@@ -2493,9 +2642,23 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 30px;
-	height: 30px;
+	width: 26px;
+	height: 26px;
+	flex: 0 0 26px;
+	margin: 0;
 	padding: 0;
+	border: 1px solid var(--tg-task-soft-border);
+	border-radius: var(--tg-radius-sm);
+	background: transparent;
+	box-shadow: none;
+	color: var(--tg-muted);
+	cursor: pointer;
+}
+
+.tg-routine-group-menu:hover,
+.tg-routine-group-menu:focus-visible {
+	background: var(--tg-surface-hover);
+	color: var(--tg-text);
 }
 
 .tg-routine-group-menu svg {
@@ -2595,14 +2758,9 @@
 }
 
 .tg-routine-reminder-time {
-	display: inline-flex;
-	align-items: center;
-	min-height: 20px;
-	padding: 2px 6px;
-	border-radius: 999px;
-	background: color-mix(in srgb, var(--tg-task-future) 10%, transparent);
 	color: var(--tg-task-future);
-	font-size: 9px;
+	background: color-mix(in srgb, var(--tg-task-future) 10%, transparent);
+	font-size: 11px;
 	font-variant-numeric: tabular-nums;
 }
 
@@ -2612,56 +2770,7 @@
 	font-weight: 650;
 }
 
-.tg-task-row.is-routine {
-	border-color: color-mix(in srgb, var(--tg-task-today) 22%, var(--tg-task-soft-border));
-}
-
 .tg-task-row.is-routine.tg-task-status-cancelled .tg-task-description {
-	text-decoration: line-through;
-}
-
-.tg-routine-item {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	min-width: 0;
-	min-height: 28px;
-}
-
-.tg-routine-check {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 15px;
-	height: 15px;
-	flex: 0 0 15px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 4px;
-	color: var(--text-faint);
-}
-
-.tg-routine-check svg {
-	width: 10px;
-	height: 10px;
-}
-
-.tg-routine-item.is-done .tg-routine-check {
-	border-color: var(--tg-task-done);
-	background: var(--tg-task-done);
-	color: var(--text-on-accent);
-}
-
-.tg-routine-item-title {
-	min-width: 0;
-	overflow: hidden;
-	color: var(--tg-text);
-	font-size: 10.5px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.tg-routine-item.is-done .tg-routine-item-title {
-	color: var(--tg-muted);
 	text-decoration: line-through;
 }
 
@@ -2713,8 +2822,7 @@
 	color: var(--text-error);
 }
 
-/* sticky 固定区在既有断点两端的自身间距，保证跨断点时固定区高度变化不产生跳动
-   （统计卡 2/4 列切换、极窄 padding 收紧仍由上方既有规则处理，不在此重复） */
+/* sticky 固定区在既有断点两端的自身间距，保证跨断点时固定区高度变化不产生跳动 */
 @container tg-task-view (max-width: 320px) {
 	.tg-task-center-header {
 		padding-top: 1px;
@@ -2724,31 +2832,13 @@
 		padding-inline: 1px;
 	}
 
-	.tg-task-stats {
-		gap: 5px;
+	.tg-task-panel button.tg-task-stat {
+		min-height: 44px;
+		padding: 6px 2px;
 	}
 
-	.tg-task-stat {
-		min-height: 45px;
-		padding: 7px;
-	}
-
-	.tg-task-stat-icon {
-		width: 22px;
-		height: 22px;
-		flex-basis: 22px;
-	}
-
-	.tg-task-filter-category {
-		display: none;
-	}
-
-	.tg-task-filter-compact {
-		display: inline-flex;
-	}
-
-	.tg-task-filter-buttons {
-		overflow: hidden;
+	.tg-task-stat-value {
+		font-size: 12px;
 	}
 
 	.tg-task-row {
@@ -2756,7 +2846,7 @@
 	}
 
 	.tg-task-row-main {
-		grid-template-columns: 26px minmax(0, 1fr) 26px;
+		grid-template-columns: 26px minmax(0, 1fr) auto;
 		gap: 8px;
 	}
 
@@ -2811,25 +2901,9 @@
 		padding-top: 3px;
 	}
 
-	.tg-task-stats {
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 8px;
-	}
-
-	.tg-task-stat {
-		min-height: 54px;
-		padding: 9px 11px;
-	}
-
-	.tg-task-controls {
-		display: grid;
-		grid-template-columns: minmax(210px, 1fr) auto;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.tg-task-filter-buttons {
-		justify-content: flex-end;
+	.tg-task-panel button.tg-task-stat {
+		min-height: 52px;
+		padding: 9px 6px;
 	}
 
 	.tg-task-row {
@@ -2874,7 +2948,13 @@
 	}
 	/* iOS Safari：输入框字号 < 16px 时聚焦会自动放大视口，放大后 sticky 会错位。
 	   只在触屏提高搜索框字号，桌面保持 12px 不变 */
-	.tg-task-search-input {
+	.tg-task-panel .tg-task-search {
+		min-height: 44px;
+		height: 44px;
+	}
+
+	.tg-task-panel .tg-task-search-input,
+	.tg-task-panel input.tg-task-search-input[type="search"] {
 		font-size: 16px;
 	}
 
@@ -2889,13 +2969,12 @@
 		height: 44px;
 	}
 
-	.tg-task-search-input,
 	.tg-timer-input {
 		height: 44px;
 	}
 
 	.tg-task-row-main {
-		grid-template-columns: 44px minmax(0, 1fr) 44px;
+		grid-template-columns: 44px minmax(0, 1fr) auto;
 		align-items: start;
 		gap: 6px;
 	}
@@ -2912,9 +2991,17 @@
 	}
 
 	.tg-task-panel button.tg-task-status-control {
-		min-width: 44px !important;
-		min-height: 44px !important;
-		height: 44px !important;
+		position: relative;
+		/* 触屏扩大热区，不抬高 meta 行本体高度 */
+		min-width: 0 !important;
+		min-height: 0 !important;
+		height: auto !important;
+	}
+
+	.tg-task-panel button.tg-task-status-control::after {
+		content: '';
+		position: absolute;
+		inset: -12px -10px;
 	}
 
 	.tg-task-layer button {
