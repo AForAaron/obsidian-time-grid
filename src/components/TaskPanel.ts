@@ -718,7 +718,6 @@ export class TaskPanel {
 		const copy = summary.createSpan('tg-routine-copy');
 		copy.createSpan({ cls: 'tg-routine-title', text: group.title });
 		copy.createSpan({ cls: 'tg-routine-subtitle', text: group.subtitle ?? '今天的固定例行事项' });
-		summary.createSpan({ cls: 'tg-routine-progress', text: `${progress.completed} / ${progress.total}` });
 		const chevron = summary.createSpan('tg-routine-chevron');
 		setIcon(chevron, collapsed ? 'chevron-right' : 'chevron-down');
 		summary.addEventListener('click', () => {
@@ -726,7 +725,9 @@ export class TaskPanel {
 			else this.collapsedRoutineGroups.add(group.id);
 			this.render();
 		});
-		const manage = bar.createEl('button', {
+		const meta = bar.createDiv('tg-routine-summary-meta');
+		meta.createSpan({ cls: 'tg-routine-progress', text: `${progress.completed} / ${progress.total}` });
+		const manage = meta.createEl('button', {
 			cls: 'tg-routine-group-menu',
 			attr: { type: 'button', 'aria-label': `管理组合：${group.title}`, title: '管理组合' },
 		});

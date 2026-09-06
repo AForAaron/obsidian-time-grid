@@ -1907,8 +1907,12 @@
 	align-items: flex-start;
 	gap: 2px;
 	flex: 0 0 auto;
-	min-width: 52px;
 	min-height: 26px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .tg-task-row-quick {
@@ -1917,6 +1921,11 @@
 	gap: 2px;
 	min-width: 26px;
 	min-height: 26px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .tg-task-row-quick.is-empty {
@@ -2535,34 +2544,45 @@
 }
 
 .tg-routine-group {
-	overflow: hidden;
-	border: 1px solid var(--tg-task-soft-border);
-	border-radius: var(--tg-radius-md);
-	background: var(--tg-task-card);
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	min-width: 0;
 }
 
 .tg-routine-summary-bar {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
 	min-height: 42px;
-	padding-right: 6px;
+	margin: 0 0 7px;
+	padding: 7px 9px;
+	border: 1px solid var(--tg-task-soft-border);
+	border-radius: var(--tg-radius-md);
+	background: var(--tg-task-card);
+	box-shadow: none;
+	color: var(--tg-text);
 }
 
-.tg-routine-summary {
-	appearance: none;
+.tg-task-panel button.tg-routine-summary {
+	appearance: none !important;
+	-webkit-appearance: none !important;
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	flex: 1;
 	min-width: 0;
-	min-height: 42px;
+	min-height: 0;
 	margin: 0;
-	padding: 7px 9px;
-	border: 0;
-	background: transparent;
-	box-shadow: none;
-	color: var(--tg-text);
+	padding: 0;
+	border: 0 !important;
+	border-radius: 0;
+	background: transparent !important;
+	box-shadow: none !important;
+	color: inherit;
 	font: inherit;
 	text-align: left;
 	cursor: pointer;
@@ -2607,16 +2627,31 @@
 	white-space: nowrap;
 }
 
+.tg-routine-summary-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
 .tg-routine-progress {
 	flex: 0 0 auto;
+	min-width: 22px;
+	padding: 2px 6px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--tg-task-today) 14%, transparent);
 	color: var(--tg-task-today);
 	font-family: var(--font-monospace);
-	font-size: 10px;
+	font-size: 9px;
 	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
 }
 
 .tg-routine-chevron {
 	display: inline-flex;
+	flex: 0 0 auto;
 	color: var(--text-faint);
 }
 
@@ -2624,44 +2659,52 @@
 	display: flex;
 	flex-direction: column;
 	gap: 5px;
-	padding: 0 8px 8px;
+	min-width: 0;
 }
 
 .tg-routine-header {
 	display: block;
 }
 
-.tg-routine-group-menu,
 .tg-routine-manage-button,
 .tg-routine-message > button,
 .tg-routine-yesterday > button {
 	border-radius: var(--tg-task-radius-sm);
 }
 
-.tg-routine-group-menu {
+.tg-task-panel button.tg-routine-group-menu {
+	appearance: none !important;
+	-webkit-appearance: none !important;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	align-self: center;
 	width: 26px;
 	height: 26px;
 	flex: 0 0 26px;
+	flex-shrink: 0;
 	margin: 0;
 	padding: 0;
-	border: 1px solid var(--tg-task-soft-border);
+	border: 0 !important;
 	border-radius: var(--tg-radius-sm);
-	background: transparent;
-	box-shadow: none;
-	color: var(--tg-muted);
+	background: transparent !important;
+	box-shadow: none !important;
+	color: var(--tg-text-muted, var(--text-muted));
 	cursor: pointer;
 }
 
-.tg-routine-group-menu:hover,
-.tg-routine-group-menu:focus-visible {
-	background: var(--tg-surface-hover);
-	color: var(--tg-text);
+.tg-task-panel button.tg-routine-group-menu:hover:not(:disabled),
+.tg-task-panel button.tg-routine-group-menu:focus-visible {
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover)) !important;
+	color: var(--tg-text-primary, var(--text-normal));
 }
 
-.tg-routine-group-menu svg {
+.tg-task-panel button.tg-routine-group-menu:focus-visible {
+	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
+	outline-offset: 1px;
+}
+
+.tg-task-panel button.tg-routine-group-menu svg {
 	width: 14px;
 	height: 14px;
 }
@@ -2912,7 +2955,7 @@
 
 	.tg-task-description {
 		font-size: 13px;
-		padding-right: 76px;
+		padding-right: 0;
 	}
 
 	.tg-task-meta {
@@ -2963,10 +3006,14 @@
 	.tg-task-search-clear,
 	.tg-task-checkbox,
 	.tg-task-more-button,
-	.tg-task-row-action,
-	.tg-routine-group-menu {
+	.tg-task-row-action {
 		width: 44px;
 		height: 44px;
+	}
+
+	/* 管理钮留在 summary 条内，不放大到 44px 以免撑破条高 */
+	.tg-routine-summary-bar {
+		min-height: 44px;
 	}
 
 	.tg-timer-input {
@@ -3680,10 +3727,6 @@
 		grid-column: 1 / -1;
 		width: 100%;
 	}
-
-	.tg-routine-items {
-		padding-inline: 5px;
-	}
 }
 
 @media (max-width: 520px) {
@@ -4300,38 +4343,9 @@
 	outline-offset: 1px;
 }
 
-.tg-routine-group-menu {
-	appearance: none;
-	-webkit-appearance: none;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 30px;
-	height: 30px;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	box-shadow: none;
-	color: var(--tg-text-muted, var(--text-muted));
-	cursor: pointer;
-}
-
-.tg-routine-group-menu:hover:not(:disabled),
-.tg-routine-group-menu:focus-visible {
-	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
-	color: var(--tg-text-primary, var(--text-normal));
-}
-
-.tg-routine-group-menu:focus-visible {
-	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
-	outline-offset: 1px;
-}
-
-/* 任务卡 ghost 图标钮（+ / ↻ / 清空 X / … / 行内 ↻ ⋮） */
+/* 任务卡 ghost 图标钮（+ / ↻ / 清空 X / … / 行内编辑） */
 .tg-task-icon-button,
-.tg-task-search-clear,
-.tg-task-more-button,
-.tg-task-row-action {
+.tg-task-search-clear {
 	appearance: none;
 	-webkit-appearance: none;
 	display: inline-flex;
@@ -4347,48 +4361,58 @@
 	font: inherit;
 }
 
+.tg-task-panel button.tg-task-more-button,
+.tg-task-panel button.tg-task-row-action {
+	appearance: none !important;
+	-webkit-appearance: none !important;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	flex: 0 0 26px;
+	flex-shrink: 0;
+	margin: 0;
+	padding: 0;
+	border: 0 !important;
+	border-radius: var(--tg-btn-radius, 6px);
+	background: transparent !important;
+	box-shadow: none !important;
+	color: var(--tg-text-muted, var(--text-muted));
+	cursor: pointer;
+	font: inherit;
+}
+
 .tg-task-icon-button:hover:not(:disabled),
 .tg-task-icon-button:focus-visible,
 .tg-task-search-clear:hover:not(:disabled),
 .tg-task-search-clear:focus-visible,
-.tg-task-more-button:hover:not(:disabled),
-.tg-task-more-button:focus-visible,
-.tg-task-row-action:hover:not(:disabled),
-.tg-task-row-action:focus-visible {
-	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover));
+.tg-task-panel button.tg-task-more-button:hover:not(:disabled),
+.tg-task-panel button.tg-task-more-button:focus-visible,
+.tg-task-panel button.tg-task-row-action:hover:not(:disabled),
+.tg-task-panel button.tg-task-row-action:focus-visible {
+	background: var(--tg-btn-ghost-hover, var(--background-modifier-hover)) !important;
 	color: var(--tg-text-primary, var(--text-normal));
 }
 
 .tg-task-icon-button:focus-visible,
 .tg-task-search-clear:focus-visible,
-.tg-task-more-button:focus-visible,
-.tg-task-row-action:focus-visible {
+.tg-task-panel button.tg-task-more-button:focus-visible,
+.tg-task-panel button.tg-task-row-action:focus-visible {
 	outline: 2px solid var(--tg-btn-focus-ring, var(--tg-accent-strong));
 	outline-offset: 1px;
 }
 
 .tg-task-icon-button svg,
-.tg-task-more-button svg,
-.tg-task-row-action svg {
-	width: 15px;
-	height: 15px;
+.tg-task-panel button.tg-task-more-button svg,
+.tg-task-panel button.tg-task-row-action svg {
+	width: 14px;
+	height: 14px;
 }
 
 .tg-task-icon-button {
 	width: 30px;
 	height: 30px;
-	border-radius: var(--tg-btn-radius, 6px);
-}
-
-.tg-task-more-button {
-	width: 26px;
-	height: 26px;
-	border-radius: var(--tg-btn-radius, 6px);
-}
-
-.tg-task-row-action {
-	width: 25px;
-	height: 25px;
 	border-radius: var(--tg-btn-radius, 6px);
 }
 
