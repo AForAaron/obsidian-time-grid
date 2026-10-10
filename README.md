@@ -1,4 +1,59 @@
-# Time Grid - Obsidian 插件
+# Time Grid · Obsidian 插件
+
+> 极简时间管理与可视化插件：日晷式「此刻回环」时间视图 + 全库任务中心，数据全部存在你自己的 Markdown 笔记里。
+
+## 这是什么
+
+在 Obsidian 右侧面板提供两个视图：
+
+- **时间视图**：日晷式「此刻回环」从中长期轨迹层层收敛到当下——贡献图式热力图、当月位置、外圈 24 小时刻度 + 内圈 60 分钟刻度、今日计时去向圆环、内置计时器（支持原子切换与「停止并完成 / 仅停止 / 继续计时」三选）
+- **任务视图**：读写全库、符合 Tasks 插件 emoji 语法的任务中心——六分区、四态管理、编辑与快捷操作、即时搜索与筛选
+
+**不建立任何数据库**，所有数据都在你自己的 Markdown 笔记里。
+
+## 状态
+
+- **阶段**：v0.3.0（`manifest.json` 中的 `id` 固定为 `time-grid`，与仓库名无关，不要改）
+- **已完成**：两个视图、内置计时器、任务关联解析、迁移流程、真实 vault 冒烟验收
+- **已知缺口**：iPhone / Android 实机验收未做
+
+## 安装
+
+把 `main.js`、`manifest.json`、`styles.css` 放进 vault 的 `.obsidian/plugins/time-grid/`，或在项目根目录跑：
+
+```bash
+bash install.sh
+```
+
+安装后需在 Obsidian 里关闭 / 开启插件（或重启）才会加载新构建。
+
+## 开发
+
+```bash
+npm install
+npm test            # 核心用例
+npm run build       # 产出 main.js
+```
+
+## 结构
+
+```text
+src/                       插件源码（含 timer / routine / task 模块）
+tests/                     自动测试与 Obsidian stub
+scripts/                   集成测试与工具脚本
+Time Grid Design System*/  设计系统稿（含 token 与组件参考）
+PROJECT_CONTEXT.md         开发日志（内部记录）
+TASK_INTEGRATION_SPEC.md   任务集成规格
+```
+
+## 数据与隐私
+
+插件只读写你 vault 内的 Markdown 文件，不联网、不上传。所有删除操作都有二次确认；危险的批量写入会被拒绝而非静默执行。
+
+<!-- readme-skeleton: 顶部为统一骨架，其下为原文，未删减 -->
+
+---
+
 
 极简主义的时间管理与可视化工具 - 向死而生 (Memento Mori)
 
