@@ -1,0 +1,148 @@
+/* ============================================================================
+   TimeGrid · 固定头部增量样式
+   合并进 src/styles/main.css。全部为增量规则，不改动任何既有声明。
+   插入位置见每节注释；类名与仓库源码 1:1（.tg-container / .tg-view-header /
+   .tg-task-center-header / .tg-task-view），未新增任何业务类名。
+   新增的唯一状态类是 .is-scrolled（挂在 .tg-container 上，由 JS 切换）。
+   ========================================================================== */
+
+/* ---- 1. 固定区通用增量 ---------------------------------------------------
+   插入位置：main.css 中 `.tg-view-header { … }` 规则之后。
+
+   .tg-container 是唯一滚动容器，padding: clamp(8px, 2.5cqi, 12px)。
+   sticky 的停靠基准是 scrollport（= .tg-container 的 padding box）顶边，
+   三个方向都要把这条 padding 带抵消掉，否则就是穿模口：
+   滚动内容会穿过 padding 区（它属于 scrollport），但 sticky 元素被鈱在自己的
+   包含块——.tg-container 的 content box——内，永远升不进那几像素，
+   于是固定区背景的顶边比可视区顶边低一条缝，内容从缝里滑过。
+   左右：负 margin-inline + 等量 padding-inline，把背景铺满 scrollport 宽度，
+         兼顺便挡住带负 margin 的子元素（如 .tg-task-row::before 的 left: -1px）。
+   顶部：同一套手法用在 .tg-view-header 上（见第 2 节）。
+   -------------------------------------------------------------------------- */
+.tg-container {
+	/* 与 .tg-container 自身 padding 同值，供固定区抵消用 */
+	--tg-sticky-inset: clamp(8px, 2.5cqi, 12px);
+	/* .tg-view-header 自身的盒高（不含第 2 节补上的补偿 padding）。逐项来自 main.css：
+	     .tg-view-switcher      padding: 3px（上 3 + 下 3）+ border 1px×2  → 8px
+	     .tg-view-switcher-button  height: 36px（main.css:112）            → 36px
+	     .tg-view-header        padding: 0 0 10px                          → 10px
+	   合计 54px，这里故意写少 1px：任务头部因而与切换器重叠 1px。
+	   宁可重叠（多出那一行被 z-index 更高的切换器压住），不可留缝（会漏内容）。
+	   不用 JS 测高：测量一旦碰上节点重建或帧被暂停就会变成陈值。
+	   若将来改动了上面任一数值，同步改这里即可。 */
+	--tg-view-header-h: 53px;
+}
+
+.tg-view-header,
+.tg-task-center-header {
+	margin-inline: calc(-1 * var(--tg-sticky-inset));
+	padding-inline: var(--tg-sticky-inset);
+	/* 硬性要求：完全不透明，且与滚动容器同底色，禁止 backdrop-filter。 */
+	background: var(--tg-bg);
+	/* 分隔线不用 border-bottom，而是用 box-shadow 的第一层 0 1px 0：
+	   不参与布局（无需先占一条透明边框防位移），也不会被主题或第三方
+	   样式里的 border-color: currentColor 类重置抢掉颜色。
+	   不加 transition：分隔线必须在滚动的那一刻就在位；过渡只能在有帧推进时
+	   前进，面板所在窗口不在前台时会被冻在起始值（即完全透明）。 */
+	box-shadow: none;
+}
+
+/* ---- 2. 时间视图：切换器——抵消容器顶部 padding 带（穿模修复） -------
+   现状已有 position: sticky; z-index: 20，保持；但 top: 0 不够——它只能停到
+   包含块（.tg-container 的 content box）顶边，比可视区顶边低一个 padding，
+   那条缝就是穿模口。三条一起才能堵住：
+     top: -inset      → 停靠位置上提一个 padding，盒子顶边对齐可视区顶边
+     padding-top: inset → 把切换器顶回原位，视觉不变
+     margin-top: -inset → 抵消新增的 padding，流内高度不变，下方内容不位移
+   （单用 margin-top 无效：负 margin 只改流内位置，不改停靠位置——已实测。）
+   停靠后盒子高 = 54px + inset，底边位于可视区顶边 + 54px + inset；
+   任务头部的 top 相对 content box 解析（= 可视区顶边 + inset），所以只要
+   --tg-view-header-h ≤ 54px 两者就不留缝。
+   -------------------------------------------------------------------------- */
+.tg-view-header {
+	top: calc(-1 * var(--tg-sticky-inset));
+	padding-top: var(--tg-sticky-inset);
+	margin-top: calc(-1 * var(--tg-sticky-inset));
+}
+
+/* ---- 3. 任务视图：.tg-task-center-header 由 relative 改为 sticky ---------
+   插入位置：main.css 中 `.tg-task-center-header { position: relative; … }` 之后。
+   停靠点必须让开切换器：切换器同样常驻 sticky（它是 .tg-container 的直接子节点，
+   两个视图共用），所以任务头部的 top 是切换器停靠后的高度，二者上下叠放不重合。
+   -------------------------------------------------------------------------- */
+.tg-task-center-header {
+	position: sticky;
+	top: var(--tg-view-header-h);
+	/* 低于切换器一级：极端情况下（如自定义主题放大字号）由切换器压住头部 */
+	z-index: 19;
+	/* 固定区内不允许出现内部滚动 */
+	overflow: visible;
+	/* 顶部补一点内边距，接住上方切换器落下的边界 */
+	padding-top: 2px;
+}
+
+/* ---- 4. 滚动分隔线（由滚动位置驱动，与 hover 无关） ----------------------
+   插入位置：紧随第 3 节。
+   .is-scrolled 挂在 .tg-container 上。分隔线只出现在「最下面那个固定区」底部：
+   任务视图 → 任务头部；时间视图 → 切换器。用 :has() 判断当前激活的 pane。
+   -------------------------------------------------------------------------- */
+.tg-container.is-scrolled:has(.tg-time-view.is-active) .tg-view-header,
+.tg-container.is-scrolled .tg-task-center-header {
+	/* 第一层 = 1px 分隔线，第二层 = 轻微投影（强度与 --tg-shadow-menu 一致） */
+	box-shadow: 0 1px 0 var(--tg-border-default),
+		0 4px 16px color-mix(in srgb, var(--background-modifier-box-shadow) 30%, transparent);
+}
+
+/* :has() 不可用时的回退：两个固定区都显示分隔线（视觉上仍成立，只是任务视图
+   的切换器与头部之间多出一条线）。 */
+@supports not selector(:has(*)) {
+	.tg-container.is-scrolled .tg-view-header,
+	.tg-container.is-scrolled .tg-task-center-header {
+		box-shadow: 0 1px 0 var(--tg-border-default),
+			0 4px 16px color-mix(in srgb, var(--background-modifier-box-shadow) 30%, transparent);
+	}
+}
+
+/* 不用 animation-timeline: scroll() 的纯 CSS 方案：它在 position: sticky 元素上
+   会把时间线解析为 inactive（currentTime === null），配上 fill: both 反而把
+   元素永久钉在 from 帧，而动画优先级高于普通声明，反把能用的 .is-scrolled
+   压死——实测到过，已弃用。分隔线只走 .is-scrolled 一条路。 */
+
+/* ---- 5. 容器查询增量（对齐既有断点，不新增断点） ------------------------
+   插入位置：main.css 中 `@container tg-task-view (max-width: 320px)` 之前。
+   统计卡 2 列 / 4 列的切换、极窄下的 padding 收紧都已由既有规则处理，
+   这里只补固定区在两端的自身间距，保证跨断点时固定区高度变化不产生跳动。
+   -------------------------------------------------------------------------- */
+@container tg-task-view (max-width: 320px) {
+	.tg-task-center-header {
+		padding-top: 1px;
+	}
+}
+
+@container tg-task-view (min-width: 521px) {
+	.tg-task-center-header {
+		padding-top: 3px;
+	}
+}
+
+/* ---- 6. 触屏 / 手机 ------------------------------------------------------
+   插入位置：main.css 现有 `@media (hover: none), (pointer: coarse)` 规则块之后。
+   注意：源码该块只把 .tg-task-status-control 撑到 36px，切换器按钮高度不变，
+   因此固定区高度在触屏下不会变化，停靠点无需跟着调。
+   -------------------------------------------------------------------------- */
+@media (hover: none), (pointer: coarse) {
+	/* 源码的触屏块并未改变切换器按钮高度（仍为 36px），所以
+	   --tg-view-header-h 不需要在触屏下重算。
+	   iOS Safari：输入框字号 < 16px 时聚焦会自动放大视口，放大后 sticky 会错位。
+	   这里只在触屏下提高搜索框字号，桌面保持源码的 11.5px 不变。 */
+	.tg-task-search-input {
+		font-size: 16px;
+	}
+}
+
+/* 虚拟键盘：固定区不使用 position: fixed / 100vh / 100dvh，高度全部来自
+   .tg-container 的 height: 100%（Obsidian .view-content 给定），键盘把视口
+   压矮后 sticky 依然以 scrollport 为基准，不会错位或遮挡。 */
+
+/* ---- 7. 动效降级 --------------------------------------------------------
+   本文件未引入任何过渡或动画，无需 prefers-reduced-motion 降级规则。 */
