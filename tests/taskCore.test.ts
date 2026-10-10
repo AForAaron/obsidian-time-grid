@@ -339,7 +339,7 @@ test('task filters use OR within a category and AND between categories', () => {
 	assert.equal(hasActiveTaskFilters(filters), true);
 });
 
-test('quick scope filters overdue today and active without touching advanced filters', () => {
+test('quick scope filters overdue today and daily without touching advanced filters', () => {
 	const tasks = [
 		parseTaskLine('- [ ] Overdue 📅 2026-07-30', 'One.md', 0, '2026-08-01', '#goal'),
 		parseTaskLine('- [ ] Today 📅 2026-08-01', 'One.md', 1, '2026-08-01', '#goal'),
@@ -357,8 +357,35 @@ test('quick scope filters overdue today and active without touching advanced fil
 	filters.quickScope = 'overdue';
 	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.description), ['Overdue']);
 
-	filters.quickScope = 'active';
-	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.description), ['Overdue', 'Today', 'Future']);
+	// 「每日」scope 只看带 routine 标记的任务；上述 fixture 都没有 routine，故空
+	filters.quickScope = 'daily';
+	assert.deepEqual(filterTasks(tasks, filters).map((task) => task.description), []);
+});
+
+test('quick scope today also matches tasks marked alsoToday', () => {
+	const tasks = [
+		parseTaskLine('- [ ] Due today 📅 2026-08-01', 'One.md', 0, '2026-08-01', '#goal'),
+		parseTaskLine('- [ ] Future but written today 📅 2026-08-05', 'Daily.md', 1, '2026-08-01', '#goal'),
+		parseTaskLine('- [ ] Plain future 📅 2026-08-05', 'One.md', 2, '2026-08-01', '#goal'),
+	];
+	// 模拟 TaskPanel 的 markTodayOrigin：第二行写在今日日记里
+	tasks[1].alsoToday = true;
+	const filters = createEmptyTaskFilters();
+	filters.quickScope = 'today';
+	assert.deepEqual(
+		filterTasks(tasks, filters).map((task) => task.description),
+		['Due today', 'Future but written today'],
+	);
+});
+
+test('today origin follows file path and created date but skips goal routine and terminal', () => {
+	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
+	const fn = panel.match(/function isTodayOrigin[\s\S]*?\n\}/)?.[0] ?? '';
+	assert.match(fn, /task\.routine/);
+	assert.match(fn, /'goal'/);
+	assert.match(fn, /'done'/);
+	assert.match(fn, /task\.filePath === context\.todayFilePath/);
+	assert.match(fn, /task\.created === context\.todayKey/);
 });
 
 test('task center header uses 1b stats chips and advanced filter badge', () => {
@@ -396,11 +423,12 @@ test('task center header uses 1b stats chips and advanced filter badge', () => {
 	assert.doesNotMatch(panel, /on && chip\.scope === 'all'/);
 });
 
-test('quick scope order is all today overdue active for stats and chips', () => {
+test('quick scope order is all daily today overdue for stats and chips', () => {
 	const panel = readFileSync(resolve('src/components/TaskPanel.ts'), 'utf8');
 	const orderBlock = panel.match(/const QUICK_SCOPE_ORDER[\s\S]*?\];/)?.[0] ?? '';
-	assert.match(orderBlock, /scope: 'all'[\s\S]*scope: 'today'[\s\S]*scope: 'overdue'[\s\S]*scope: 'active'/);
+	assert.match(orderBlock, /scope: 'all'[\s\S]*scope: 'daily'[\s\S]*scope: 'today'[\s\S]*scope: 'overdue'/);
 	assert.doesNotMatch(orderBlock, /scope: 'all'[\s\S]*scope: 'overdue'[\s\S]*scope: 'today'/);
+	assert.doesNotMatch(orderBlock, /scope: 'active'/);
 });
 
 test('filtered section counts retain matching and total values', () => {

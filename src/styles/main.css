@@ -1240,7 +1240,7 @@
 .tg-task-stat.is-total .tg-task-stat-value { color: var(--tg-text-primary, var(--tg-text)); }
 .tg-task-stat.is-overdue .tg-task-stat-value { color: var(--tg-status-overdue, var(--tg-task-overdue)); }
 .tg-task-stat.is-today .tg-task-stat-value { color: var(--tg-accent-strong); }
-.tg-task-stat.is-active .tg-task-stat-value { color: var(--tg-status-done, var(--tg-task-done)); }
+.tg-task-stat.is-daily .tg-task-stat-value { color: var(--tg-routine, var(--tg-status-done, var(--tg-task-done))); }
 
 .tg-task-stat-label {
 	font-size: var(--tg-text-xs, 11px);
@@ -1693,6 +1693,36 @@
 	margin-bottom: 9px;
 }
 
+.tg-routine-area-heading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 9px;
+	margin-bottom: 4px;
+	color: var(--tg-task-section-title);
+}
+
+.tg-routine-area-heading-icon {
+	color: var(--tg-task-section-title);
+}
+
+.tg-routine-area-heading-labels {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.tg-routine-area-heading-title {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}
+
+.tg-routine-area-heading-subtitle {
+	font-size: 11px;
+	color: var(--tg-text-muted);
+}
+
 .tg-task-section-heading {
 	appearance: none;
 	display: flex;
@@ -1819,6 +1849,28 @@
 	font-size: 9.5px;
 	font-weight: 620;
 	color: var(--tg-muted);
+}
+
+.tg-task-today-subheading {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 10px 7px 4px;
+	font-size: 10.5px;
+	font-weight: 620;
+	letter-spacing: 0.04em;
+	color: var(--tg-muted);
+	text-transform: uppercase;
+}
+
+.tg-task-today-subheading-label {
+	flex: 0 0 auto;
+}
+
+.tg-task-today-subheading-count {
+	font-variant-numeric: tabular-nums;
+	font-size: 9.5px;
+	opacity: 0.85;
 }
 
 .tg-task-future-heading::before {

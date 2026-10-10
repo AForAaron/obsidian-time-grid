@@ -76,6 +76,12 @@ export interface TGTask {
 	trailing: string[];
 	tags: string[];
 	section: TaskSection;
+	/**
+	 * 除 section 之外额外归入「今日」分区。用于「写在今日日记里」或「➕ 今天创建」的任务：
+	 * section 仍按 due 计算（所以未来/待分类分区照常显示），此标记只让它们同时出现在今日。
+	 * routine 任务、#goal 任务和已结束任务恒为 false。由 TaskPanel 每次渲染时计算。
+	 */
+	alsoToday?: boolean;
 	hasRecurrence: boolean;
 	routine?: RoutineTaskMeta;
 	diagnostics: TaskDiagnostic[];

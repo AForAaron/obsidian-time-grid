@@ -2,8 +2,8 @@ import { TaskPriority, TaskSection, TaskStatusKind, TGTask } from '../types/task
 
 export type TaskPriorityFilter = TaskPriority | 'none';
 
-/** 顶部快捷范围：全部 / 逾期 / 今天 / 活跃（非已结束） */
-export type TaskQuickScope = 'all' | 'overdue' | 'today' | 'active';
+/** 顶部快捷范围：全部 / 每日（流程） / 今日（今日到期） / 逾期 */
+export type TaskQuickScope = 'all' | 'overdue' | 'today' | 'daily';
 
 export interface TaskFilterState {
 	query: string;
@@ -39,8 +39,8 @@ export function filterTasks(tasks: TGTask[], filters: TaskFilterState): TGTask[]
 	const query = filters.query.trim().toLocaleLowerCase();
 	return tasks.filter((task) => {
 		if (filters.quickScope === 'overdue' && task.section !== 'overdue') return false;
-		if (filters.quickScope === 'today' && task.section !== 'today') return false;
-		if (filters.quickScope === 'active' && task.section === 'done') return false;
+		if (filters.quickScope === 'today' && task.section !== 'today' && !task.alsoToday) return false;
+		if (filters.quickScope === 'daily' && !task.routine) return false;
 		if (query) {
 			const searchable = `${task.description}\n${task.tags.join(' ')}\n${task.filePath}`.toLocaleLowerCase();
 			if (!searchable.includes(query)) return false;

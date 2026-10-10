@@ -43,6 +43,7 @@ import { mountPriorityBadge } from './PriorityPicker';
 import { RoutineIndex } from '../utils/routineIndex';
 import { displayRoutineTitle } from '../utils/routineMarker';
 import { isRoutineReminderDue } from '../utils/routineReminder';
+import { getDailyNoteFileForDate } from '../utils/dailyNotes';
 import { formatTimerElapsed } from '../utils/timerFormat';
 import { canCompleteLinkedTask, canStartTimerFromTask, startTaskTimer, taskTimerDefaultName } from '../utils/taskTimer';
 
@@ -102,18 +103,18 @@ const PRIORITY_FILTER_OPTIONS: Array<{ value: TaskPriorityFilter; code: string; 
 	{ value: 'none', code: '－', name: '无优先级' },
 ];
 
-/** 统计格与 chips 共用顺序：全部 → 今天 → 逾期 → 活跃 */
+/** 统计格与 chips 共用顺序：总数 → 每日 → 今日 → 逾期 */
 const QUICK_SCOPE_ORDER: Array<{
 	scope: TaskQuickScope;
 	statLabel: string;
 	chipLabel: string;
 	tone: string;
-	countKey: 'total' | 'today' | 'overdue' | 'active';
+	countKey: 'total' | 'daily' | 'today' | 'overdue';
 }> = [
 	{ scope: 'all', statLabel: '总数', chipLabel: '全部', tone: 'total', countKey: 'total' },
-	{ scope: 'today', statLabel: '今天', chipLabel: '今天', tone: 'today', countKey: 'today' },
+	{ scope: 'daily', statLabel: '每日', chipLabel: '每日', tone: 'daily', countKey: 'daily' },
+	{ scope: 'today', statLabel: '今日', chipLabel: '今日', tone: 'today', countKey: 'today' },
 	{ scope: 'overdue', statLabel: '逾期', chipLabel: '逾期', tone: 'overdue', countKey: 'overdue' },
-	{ scope: 'active', statLabel: '活跃', chipLabel: '活跃', tone: 'active', countKey: 'active' },
 ];
 
 export class TaskPanel {
@@ -222,7 +223,10 @@ export class TaskPanel {
 		const routineSnapshot = this.options.routineIndex?.getSnapshot();
 		const routineInstances = routineSnapshot?.groups.flatMap((group) => group.items) ?? [];
 		const allTasks = snapshot.tasks.concat(routineInstances.map((instance) => instance.task));
-		this.renderHeader(allTasks, snapshot.isIndexing || Boolean(routineSnapshot?.isIndexing));
+		// 「今日来源」判定：写在今天日期的日记里，或 ➕ 标记为今天创建。
+		// goal / routine / 已结束三类不参与（goal 优先，routine 归每日，已结束归归档）。
+		const todayContext = this.buildTodayContext();
+		this.renderHeader(allTasks, routineInstances, todayContext, snapshot.isIndexing || Boolean(routineSnapshot?.isIndexing));
 		this.renderTimerStrip();
 		if ((snapshot.isIndexing || routineSnapshot?.isIndexing) && allTasks.length === 0) {
 			this.renderLoading();
@@ -234,6 +238,8 @@ export class TaskPanel {
 		const displayBase = ordinaryTasks.filter((task) => task.section !== 'done')
 			.concat(filterTerminalTasks(ordinaryTasks.filter((task) => task.section === 'done'), settings.doneRange))
 			.concat(routineInstances.map((instance) => instance.task));
+		// 标记「今日来源」：section 不变（未来/待分类照常显示），只加 alsoToday 让它们同时进今日
+		markTodayOrigin(displayBase, todayContext);
 		const filteredTasks = filterTasks(displayBase, this.filters);
 		const counts = countFilteredSections(displayBase, filteredTasks);
 		const filtering = hasActiveTaskFilters(this.filters);
@@ -247,23 +253,53 @@ export class TaskPanel {
 			? routineSnapshot.groups.map((group) => ({ ...group, items: group.items.filter((item) => filteredTaskIds.has(item.task.id)) }))
 				.filter((group) => group.items.length > 0 || !filtering)
 			: [];
-		if (routineSnapshot && (!filtering || visibleRoutineGroups.length > 0)) {
-			this.renderRoutineArea(this.container.createDiv('tg-routine-area'), routineSnapshot, visibleRoutineGroups);
+		// 「每日」scope 只看流程，其他分区全部隐藏
+		const routineOnlyScope = this.filters.quickScope === 'daily';
+		// 任何非 'all' 的 scope（除 'daily' 外）只显示对应 section，routine 区也隐藏
+		const showRoutineArea = (this.filters.quickScope === 'all' || this.filters.quickScope === 'daily')
+			&& Boolean(routineSnapshot)
+			&& (!filtering || visibleRoutineGroups.length > 0);
+		// 今日分区 heading 计数需要排除 routine（否则数字会大于实际渲染的卡片）
+		const todayNonRoutineTotal = displayBase.filter((t) => !t.routine && (t.section === 'today' || t.alsoToday)).length;
+		const todayNonRoutineFiltered = filteredTasks.filter((t) => !t.routine && (t.section === 'today' || t.alsoToday)).length;
+		if (showRoutineArea) {
+			this.renderRoutineArea(this.container.createDiv('tg-routine-area'), routineSnapshot!, visibleRoutineGroups);
 		}
-		for (const config of SECTION_CONFIG) {
-			const sectionTasks = sortTasks(config.section, filteredTasks.filter((task) => task.section === config.section && !task.routine));
-			if (config.section === 'done') {
-				sectionTasks.push(...filteredTasks.filter((task) => task.section === 'done' && Boolean(task.routine)));
+		if (!routineOnlyScope) {
+			for (const config of SECTION_CONFIG) {
+				// 选了某个具体 scope 时只渲染那一个分区，避免 alsoToday 任务在其他分区重复出现
+				if (this.filters.quickScope === 'today' && config.section !== 'today') continue;
+				if (this.filters.quickScope === 'overdue' && config.section !== 'overdue') continue;
+				const inSection = (task: TGTask): boolean => config.section === 'today'
+					? task.section === 'today' || Boolean(task.alsoToday)
+					: task.section === config.section;
+				const sectionTasks = sortTasks(config.section, filteredTasks.filter((task) => inSection(task) && !task.routine));
+				if (config.section === 'done') {
+					sectionTasks.push(...filteredTasks.filter((task) => task.section === 'done' && Boolean(task.routine)));
+				}
+				if (config.section === 'today') {
+					this.renderTodaySection(
+						config,
+						sectionTasks,
+						todayNonRoutineFiltered,
+						todayNonRoutineTotal,
+						filtering,
+						totalOverRenderThreshold,
+						settings.renderLimit,
+						todayContext
+					);
+					continue;
+				}
+				this.renderSection(
+					config,
+					sectionTasks,
+					counts.filtered[config.section] ?? 0,
+					counts.total[config.section] ?? 0,
+					filtering,
+					totalOverRenderThreshold,
+					settings.renderLimit
+				);
 			}
-			this.renderSection(
-				config,
-				sectionTasks,
-				counts.filtered[config.section] ?? 0,
-				counts.total[config.section] ?? 0,
-				filtering,
-				totalOverRenderThreshold,
-				settings.renderLimit
-			);
 		}
 		this.restoreScroll(outerScroll, previousScrollTop);
 		if (searchFocused) {
@@ -275,9 +311,18 @@ export class TaskPanel {
 		}
 	}
 
-	private renderHeader(tasks: TGTask[], isIndexing: boolean): void {
-		const header = this.container.createDiv('tg-task-center-header');
+	/**
+	 * 计算「今日来源」上下文：今天日期的日记文件路径 + 今天的日期 key。
+	 * 供 isTodayOrigin 判定使用——写在今日日记里、或 ➕ 标记为今天的任务都算「今日来源」。
+	 */
+	private buildTodayContext(): TodayContext {
+		const todayKey = getTodayKey();
+		const file = getDailyNoteFileForDate(this.app, new Date());
+		return { todayKey, todayFilePath: file?.path };
+	}
 
+	private renderHeader(tasks: TGTask[], routineInstances: RoutineInstance[], todayContext: TodayContext, isIndexing: boolean): void {
+		const header = this.container.createDiv('tg-task-center-header');
 		const heading = header.createDiv('tg-task-center-heading');
 		const titleBox = heading.createDiv('tg-task-center-title-box');
 		titleBox.createEl('h2', { cls: 'tg-task-center-title', text: '任务中心' });
@@ -301,10 +346,15 @@ export class TaskPanel {
 
 		const total = tasks.length;
 		const overdue = countSection(tasks, 'overdue');
-		const today = countSection(tasks, 'today');
-		const active = tasks.filter((task) => task.section !== 'done').length;
+		// 每日 = 今天还没完成 / 没跳过的 routine 实例（这些 routine 在 today 分区里，但不归"今日"格）
+		const daily = routineInstances.filter(
+			(instance) => instance.task.status !== 'done' && instance.task.status !== 'cancelled',
+		).length;
+		// 今日 = today 分区非 routine + 「今日来源」标记的非 routine 任务（后者 section 在别的分区）
+		const today = tasks.filter((task) => !task.routine
+			&& (task.section === 'today' || isTodayOrigin(task, todayContext))).length;
 		const scope = this.filters.quickScope;
-		const counts = { total, overdue, today, active };
+		const counts = { total, overdue, today, daily };
 
 		const statsEl = header.createDiv('tg-task-stats');
 		for (const [index, item] of QUICK_SCOPE_ORDER.entries()) {
@@ -439,7 +489,7 @@ export class TaskPanel {
 	private renderChipRow(
 		parent: HTMLElement,
 		tasks: TGTask[],
-		counts: { total: number; overdue: number; today: number; active: number }
+		counts: { total: number; overdue: number; today: number; daily: number }
 	): void {
 		const chipRow = parent.createDiv('tg-task-chip-row');
 		const chips = chipRow.createDiv('tg-task-chips');
@@ -638,7 +688,80 @@ export class TaskPanel {
 		}
 	}
 
+	/**
+	 * 今日分区专用渲染：拆为「今日新增」与「今日到期」两个子区。
+	 * - 今日新增：写在今日日记里的，或 ➕ 标记为今天创建的
+	 * - 今日到期：其他文件里 due=today 的
+	 * 两者都为空时退回单列，不显示子 heading（避免噪音）。
+	 */
+	private renderTodaySection(
+		config: { section: TaskSection; icon: string; label: string; subtitle: string },
+		tasks: TGTask[],
+		filteredCount: number,
+		totalCount: number,
+		filtering: boolean,
+		limitEnabled: boolean,
+		renderLimit: number,
+		todayContext: TodayContext
+	): void {
+		if (filtering && tasks.length === 0) return;
+
+		const sectionEl = this.container.createDiv(`tg-task-section tg-task-section-${config.section}`);
+		const heading = sectionEl.createEl('button', {
+			cls: 'tg-task-section-heading',
+			attr: { 'aria-expanded': 'true', 'aria-controls': `tg-task-list-${config.section}` },
+		});
+		const headingMain = heading.createSpan('tg-task-section-heading-main');
+		const icon = headingMain.createSpan('tg-task-section-icon');
+		setIcon(icon, config.icon);
+		const labels = headingMain.createSpan('tg-task-section-labels');
+		labels.createSpan({ cls: 'tg-task-section-title', text: config.label });
+		labels.createSpan({ cls: 'tg-task-section-subtitle', text: config.subtitle });
+		const headingMeta = heading.createSpan('tg-task-section-heading-meta');
+		headingMeta.createSpan({
+			cls: 'tg-task-section-count',
+			text: filtering ? `${filteredCount} / ${totalCount}` : String(totalCount),
+		});
+		heading.setAttr('aria-disabled', 'true');
+
+		const shouldLimit = limitEnabled && !this.expandedSections.has(config.section) && tasks.length > renderLimit;
+		const visible = shouldLimit ? tasks.slice(0, renderLimit) : tasks;
+		const inDailyNote = visible.filter((task) => isTodayOrigin(task, todayContext));
+		const elsewhere = visible.filter((task) => !isTodayOrigin(task, todayContext));
+		const showSubsections = inDailyNote.length > 0 && elsewhere.length > 0;
+
+		const list = sectionEl.createDiv({ cls: 'tg-task-list', attr: { id: `tg-task-list-${config.section}` } });
+
+		const renderSubsection = (label: string, group: TGTask[]): void => {
+			const sub = list.createDiv('tg-task-today-subheading');
+			sub.createSpan({ cls: 'tg-task-today-subheading-label', text: label });
+			sub.createSpan({ cls: 'tg-task-today-subheading-count', text: String(group.length) });
+			for (const task of group) this.renderTaskRow(list, task);
+		};
+
+		if (showSubsections) {
+			renderSubsection('今日新增', inDailyNote);
+			renderSubsection('今日到期', elsewhere);
+		} else {
+			for (const task of visible) this.renderTaskRow(list, task);
+		}
+
+		if (shouldLimit) {
+			const more = sectionEl.createEl('button', { cls: 'tg-task-more', text: `再显示 ${tasks.length - visible.length} 条` });
+			more.addEventListener('click', () => {
+				this.expandedSections.add(config.section);
+				this.render();
+			});
+		}
+	}
+
 	private renderRoutineArea(parent: HTMLElement, snapshot: RoutineSnapshot, visibleGroups: RoutineGroupViewModel[]): void {
+		const heading = parent.createDiv('tg-routine-area-heading');
+		const icon = heading.createSpan('tg-routine-area-heading-icon');
+		setIcon(icon, 'refresh-cw');
+		const labels = heading.createSpan('tg-routine-area-heading-labels');
+		labels.createSpan({ cls: 'tg-routine-area-heading-title', text: '每日' });
+		labels.createSpan({ cls: 'tg-routine-area-heading-subtitle', text: '今天的固定例行事项' });
 		if (snapshot.migrationRequired) {
 			const migration = parent.createDiv('tg-routine-message is-migration');
 			const icon = migration.createSpan('tg-routine-message-icon');
@@ -876,10 +999,12 @@ export class TaskPanel {
 		const quickActions = trailing.createDiv('tg-task-row-quick');
 		if (!blockReason && this.options.actions) {
 			this.createIconAction(quickActions, 'pencil', task.routine ? '编辑今天' : '编辑任务', () => this.openEditor(task));
-			if (!task.routine && task.due) {
-				this.createIconAction(quickActions, 'calendar-plus', '顺延一天；按住 Shift 顺延一周', (event) =>
-					this.runMutation(task, () => this.options.actions!.postponeTask(task, event.shiftKey ? 7 : 1)));
-			}
+			this.createIconAction(
+				quickActions,
+				'flag',
+				task.priority ? `设置优先级（当前 ${priorityAriaLabel(task.priority)}）` : '设置优先级',
+				(event) => this.openPriorityMenu(event, event.currentTarget as HTMLElement, task)
+			);
 		} else {
 			quickActions.addClass('is-empty');
 		}
@@ -1356,6 +1481,30 @@ function toggleSetValue<T>(set: Set<T>, value: T): void {
 
 function countSection(tasks: TGTask[], section: TaskSection): number {
 	return tasks.filter((task) => task.section === section).length;
+}
+
+/** 「今日来源」判定上下文：今天的日期 key + 今天日期的日记文件路径。 */
+interface TodayContext {
+	todayKey: string;
+	todayFilePath?: string;
+}
+
+/**
+ * 判断任务是否「源自今日」：写在今天日期的日记里，或 ➕ 标记为今天创建。
+ * goal 优先（长期任务不进今日）、routine 归每日、已结束归归档，三者都不算。
+ */
+function isTodayOrigin(task: TGTask, context: TodayContext): boolean {
+	if (task.routine) return false;
+	if (task.section === 'done' || task.section === 'goal') return false;
+	if (context.todayFilePath && task.filePath === context.todayFilePath) return true;
+	return task.created === context.todayKey;
+}
+
+/** 给 displayBase 里的任务打上 alsoToday 标记（section 语义不变，两边都显示）。 */
+function markTodayOrigin(tasks: TGTask[], context: TodayContext): void {
+	for (const task of tasks) {
+		task.alsoToday = isTodayOrigin(task, context);
+	}
 }
 
 function offsetDate(date: Date, days: number): Date {
