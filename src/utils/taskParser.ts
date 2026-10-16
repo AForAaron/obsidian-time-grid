@@ -169,9 +169,14 @@ export function sortTasks(section: TaskSection, tasks: TGTask[]): TGTask[] {
 	return [...tasks].sort((a, b) => {
 		switch (section) {
 			case 'overdue':
+				// 逾期区：优先级降序优先；同优先级内 due **降序**——最近逾期的排最前，
+				// 方便先处理刚过期的，而不是被很久以前的积压占住首屏。
+				return (priorityRank(b.priority) - priorityRank(a.priority))
+					|| compareOptional(b.due, a.due)
+					|| comparePathAndLine(a, b);
 			case 'future':
 			case 'today':
-				// 优先级降序优先；同优先级内 due 升序（逾期区拖得最久在前）
+				// 优先级降序优先；同优先级内 due 升序（最快到期的排最前）
 				return (priorityRank(b.priority) - priorityRank(a.priority))
 					|| compareOptional(a.due, b.due)
 					|| comparePathAndLine(a, b);

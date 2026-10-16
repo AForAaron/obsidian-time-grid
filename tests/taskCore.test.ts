@@ -185,6 +185,25 @@ test('sorts actionable sections by priority descending before secondary keys', (
 		['高优逾期', '旧逾期']
 	);
 
+	// 同优先级内逾期区按到期日降序：最近逾期的排最前
+	const overdueEarly = parseTaskLine('- [ ] 很早逾期 🔺 📅 2026-03-11', 'A.md', 0, '2026-08-01', '#goal');
+	const overdueLate = parseTaskLine('- [ ] 刚逾期 🔺 📅 2026-07-30', 'B.md', 0, '2026-08-01', '#goal');
+	assert.deepEqual(
+		sortTasks('overdue', [overdueEarly, overdueLate]).map((task) => task.description),
+		['刚逾期', '很早逾期']
+	);
+	assert.deepEqual(
+		sortTasks('overdue', [overdueLate, overdueEarly]).map((task) => task.description),
+		['刚逾期', '很早逾期']
+	);
+	// 未来区保持升序：最快到期的排最前
+	const futureLate = parseTaskLine('- [ ] 较远 ⏫ 📅 2026-09-30', 'A.md', 0, '2026-08-01', '#goal');
+	const futureNear = parseTaskLine('- [ ] 较近 ⏫ 📅 2026-08-03', 'B.md', 0, '2026-08-01', '#goal');
+	assert.deepEqual(
+		sortTasks('future', [futureLate, futureNear]).map((task) => task.description),
+		['较近', '较远']
+	);
+
 	const futureSoon = parseTaskLine('- [ ] 更近 📅 2026-08-05', 'A.md', 0, '2026-08-01', '#goal');
 	const futureHigh = parseTaskLine('- [ ] 高优未来 ⏫ 📅 2026-08-20', 'B.md', 0, '2026-08-01', '#goal');
 	assert.deepEqual(
