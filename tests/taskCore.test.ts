@@ -11,7 +11,7 @@ import {
 } from '../src/utils/taskParser';
 import { DEFAULT_TASK_SETTINGS } from '../src/types/task';
 import { applyTaskEditToContent, getTaskWriteBlockReason, serializeStatusChange, serializeTaskPatch, shiftDateKey } from '../src/utils/taskWriter';
-import { getEffectiveWritingDelta, normalizeTimeGridData } from '../src/utils/writingStats';
+import { countMixedWords, getEffectiveWritingDelta, normalizeTimeGridData } from '../src/utils/writingStats';
 import { countFilteredSections, createEmptyTaskFilters, filterTasks, groupFutureTasks, hasActiveTaskFilters } from '../src/utils/taskView';
 import { getRoutineProgress, getTaskMenuActions, positionFloatingLayer } from '../src/utils/taskUi';
 import { canCompleteLinkedTask, canStartTimerFromTask, resolveLinkedTask, startTaskTimer, stopTaskTimer, taskTimerDefaultName, timerStateKey } from '../src/utils/taskTimer';
@@ -125,10 +125,38 @@ test('classifies cancelled tasks as terminal and goal before due', () => {
 	assert.equal(classifyTask(goal, '2026-08-02', '#goal'), 'goal');
 });
 
-test('marks invalid and duplicate date fields as blocking', () => {
-	const task = parseTaskLine('- [ ] 坏日期 📅 2026-02-31 📅 2026-08-01', 'Inbox.md', 0, '2026-08-01', '#goal');
-	assert.equal(task.diagnostics.some((item) => item.code === 'invalid-date'), true);
-	assert.equal(task.diagnostics.some((item) => item.code === 'duplicate-field'), true);
+test('treats a date marker without a valid date as plain text instead of blocking writes', () => {
+	// 正文里出现日期 emoji 但不跟日期：不能截断描述、不能让任务变只读。
+	const prose = parseTaskLine('- [ ] 复习 📅 那天的笔记', 'Inbox.md', 0, '2026-08-01', '#goal');
+	assert.equal(prose.description, '复习 📅 那天的笔记');
+	assert.equal(prose.due, undefined);
+	assert.equal(prose.diagnostics.length, 0);
+	assert.equal(getTaskWriteBlockReason(prose), null);
+
+	const trailing = parseTaskLine('- [ ] 记一下 ✅ 完成时再说', 'Inbox.md', 1, '2026-08-01', '#goal');
+	assert.equal(trailing.description, '记一下 ✅ 完成时再说');
+	assert.equal(getTaskWriteBlockReason(trailing), null);
+
+	// 形如日期但日历上不存在：保留原文、只给不阻塞的提示，后面的合法日期照常识别。
+	const typo = parseTaskLine('- [ ] 坏日期 📅 2026-02-31 📅 2026-08-01', 'Inbox.md', 2, '2026-08-01', '#goal');
+	assert.equal(typo.due, '2026-08-01');
+	assert.equal(typo.diagnostics.some((item) => item.code === 'invalid-date' && !item.blocking), true);
+	assert.equal(getTaskWriteBlockReason(typo), null);
+
+	// 两个都合法才算真重复，仍然拒绝改写。
+	const duplicate = parseTaskLine('- [ ] 两条日期 📅 2026-08-01 📅 2026-08-02', 'Inbox.md', 3, '2026-08-01', '#goal');
+	assert.equal(duplicate.diagnostics.some((item) => item.code === 'duplicate-field' && item.blocking), true);
+	assert.match(getTaskWriteBlockReason(duplicate) ?? '', /重复字段/);
+});
+
+test('a lone emoji marker in the description keeps the task editable', () => {
+	const raw = '- [x] 21 号 下午2-5pm扔东西记得📅 📅 2026-02-21 ✅ 2026-02-14';
+	const task = parseTaskLine(raw, 'Daily.md', 0, '2026-08-01', '#goal');
+	assert.equal(task.description, '21 号 下午2-5pm扔东西记得📅');
+	assert.equal(task.due, '2026-02-21');
+	assert.equal(getTaskWriteBlockReason(task), null);
+	// 改写时会顺带把裸标记前的空格补齐（normalizeKnownMarkerSpacing 的既有行为）。
+	assert.equal(serializeStatusChange(task, 'todo', DEFAULT_TASK_SETTINGS, '2026-08-01'), '- [ ] 21 号 下午2-5pm扔东西记得 📅 📅 2026-02-21');
 });
 
 test('recognises recurrence while retaining the opaque suffix', () => {
@@ -221,11 +249,13 @@ test('record-terminal-date off changes only the checkbox and removes terminal da
 	assert.equal(serializeStatusChange(task, 'cancelled', settings, '2026-08-01'), '- [-] Alpha 🆔 keep');
 });
 
-test('recurring and malformed tasks expose blocking write reasons', () => {
+test('recurring tasks stay blocked while malformed dates stay writable', () => {
 	const recurring = parseTaskLine('- [ ] Repeat 🔁 every day 📅 2026-08-01', 'Inbox.md', 0, '2026-08-01', '#goal');
 	const malformed = parseTaskLine('- [ ] Invalid 📅 2026-13-01', 'Inbox.md', 1, '2026-08-01', '#goal');
 	assert.match(getTaskWriteBlockReason(recurring) ?? '', /循环任务/);
-	assert.match(getTaskWriteBlockReason(malformed) ?? '', /日期无效/);
+	assert.equal(malformed.due, undefined);
+	assert.equal(malformed.description, 'Invalid 📅 2026-13-01');
+	assert.equal(getTaskWriteBlockReason(malformed), null);
 });
 
 test('not-found edits return the original content unchanged', () => {
@@ -252,6 +282,14 @@ test('status edits preserve unknown metadata ordering and text', () => {
 test('task-write suppression preserves concurrent external writing deltas', () => {
 	assert.equal(getEffectiveWritingDelta(6, 1), 5);
 	assert.equal(getEffectiveWritingDelta(-3, -1), -2);
+});
+
+test('word counting strips only a leading frontmatter block, not horizontal rules', () => {
+	const withRules = '正文一\n\n---\n\n中间被吃掉的字\n\n---\n\n正文二';
+	assert.equal(countMixedWords(withRules), 13);
+	assert.equal(countMixedWords('正文一\n\n中间被吃掉的字\n\n正文二'), 13);
+	assert.equal(countMixedWords('---\ntags: [a]\n---\n\n正文一 正文二'), 6);
+	assert.equal(countMixedWords('---\r\ntags: [a]\r\n---\r\n\r\n正文一 正文二'), 6);
 });
 
 test('task patch edits selected fields while preserving opaque metadata text and order', () => {

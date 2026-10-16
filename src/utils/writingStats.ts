@@ -220,7 +220,9 @@ export function normalizeTimeGridData(raw: unknown): TimeGridPluginData {
 
 export function countMixedWords(content: string): number {
 	const withoutCodeBlocks = content
-		.replace(/^---[\s\S]*?---\s*/m, '')
+		// 只剥掉文件**开头**的 YAML frontmatter。原来的 /m 写法会把正文里
+		// 任意两条 --- 之间的内容整段删掉（水平分隔线包裹的正文不计字数）。
+		.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, '')
 		.replace(/```[\s\S]*?```/g, ' ');
 	const chineseChars = withoutCodeBlocks.match(/[\u3400-\u9fff]/g)?.length ?? 0;
 	const latinWords = withoutCodeBlocks.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g)?.length ?? 0;

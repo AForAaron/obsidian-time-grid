@@ -224,28 +224,36 @@ function findFieldTokens(raw: string, bodyStart: number, diagnostics: TaskDiagno
 		while (cursor < raw.length) {
 			const index = raw.indexOf(field.marker, cursor);
 			if (index < 0) break;
-			count++;
 			const tail = raw.slice(index + field.marker.length);
 			const dateMatch = /^[ \t]*(\d{4}-\d{2}-\d{2})/.exec(tail);
-			const rawValue = dateMatch?.[1];
-			const end = dateMatch
-				? index + field.marker.length + dateMatch[0].length
-				: index + field.marker.length;
+			if (!dateMatch) {
+				// 标记后面不是日期：这是正文里出现的符号（如「复习 📅 那天的笔记」），
+				// 按普通文字处理——不切分描述、不写诊断，也绝不改写它。
+				cursor = index + field.marker.length;
+				continue;
+			}
+			const rawValue = dateMatch[1];
+			if (!isValidDateKey(rawValue)) {
+				// 形如日期但日历上不存在（如 2026-02-31）：同样按普通文字原样保留，
+				// 只给一条不阻塞的提示，任务保持可编辑。
+				diagnostics.push({
+					code: 'invalid-date',
+					message: `${field.marker} 后的日期 ${rawValue} 无效，请在源文件中修复`,
+					blocking: false,
+				});
+				cursor = index + field.marker.length;
+				continue;
+			}
+			count++;
+			const end = index + field.marker.length + dateMatch[0].length;
 			tokens.push({
 				kind: field.kind,
 				start: index,
 				end,
 				raw: raw.slice(index, end),
-				value: rawValue && isValidDateKey(rawValue) ? rawValue : undefined,
+				value: rawValue,
 			});
-			if (!rawValue || !isValidDateKey(rawValue)) {
-				diagnostics.push({
-					code: 'invalid-date',
-					message: `${field.marker} 后的日期无效，请在源文件中修复`,
-					blocking: true,
-				});
-			}
-			cursor = Math.max(end, index + field.marker.length);
+			cursor = end;
 		}
 		if (count > 1) {
 			diagnostics.push({
