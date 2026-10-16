@@ -7,11 +7,13 @@ import { displayRoutineTitle } from '../utils/routineMarker';
 export class RoutineManagerModal extends Modal {
 	private index: RoutineIndex;
 	private writer: RoutineWriter;
+	private getDefinitionPath: () => string;
 
-	constructor(app: App, index: RoutineIndex, writer: RoutineWriter) {
+	constructor(app: App, index: RoutineIndex, writer: RoutineWriter, getDefinitionPath: () => string) {
 		super(app);
 		this.index = index;
 		this.writer = writer;
+		this.getDefinitionPath = getDefinitionPath;
 	}
 
 	onOpen(): void {
@@ -26,7 +28,7 @@ export class RoutineManagerModal extends Modal {
 		const snapshot = this.index.getSnapshot();
 		const intro = body.createDiv('tg-routine-manager-intro');
 		intro.createDiv({ text: '这里修改的是以后生成的实例；已经存在的日记不会被追溯改写。' });
-		intro.createEl('code', { text: '00-Templates/Time Grid Routines.md' });
+		intro.createEl('code', { text: this.getDefinitionPath() });
 		const toolbar = body.createDiv('tg-routine-manager-toolbar');
 		const addGroup = toolbar.createEl('button', { text: '新建组合', cls: 'tg-task-button-primary', attr: { type: 'button' } });
 		addGroup.addEventListener('click', () => this.openNewGroupForm());

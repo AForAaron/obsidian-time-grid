@@ -50,6 +50,11 @@ export class RoutineRepository {
 		};
 	}
 
+	/** 当前配置的流程配置笔记路径（随设置变化，不要硬编码）。 */
+	getDefinitionPath(): string {
+		return this.getSettings().definitionPath;
+	}
+
 	getDefinitionFile(): TFile | null {
 		const file = this.app.vault.getAbstractFileByPath(this.getSettings().definitionPath);
 		return file instanceof TFile ? file : null;

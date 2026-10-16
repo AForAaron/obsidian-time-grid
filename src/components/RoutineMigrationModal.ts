@@ -6,12 +6,20 @@ export class RoutineMigrationModal extends Modal {
 	private repository: RoutineRepository;
 	private writer: RoutineWriter;
 	private onMigrated: () => void;
+	private getDefinitionPath: () => string;
 
-	constructor(app: App, repository: RoutineRepository, writer: RoutineWriter, onMigrated: () => void) {
+	constructor(
+		app: App,
+		repository: RoutineRepository,
+		writer: RoutineWriter,
+		onMigrated: () => void,
+		getDefinitionPath: () => string
+	) {
 		super(app);
 		this.repository = repository;
 		this.writer = writer;
 		this.onMigrated = onMigrated;
+		this.getDefinitionPath = getDefinitionPath;
 	}
 
 	onOpen(): void {
@@ -33,7 +41,7 @@ export class RoutineMigrationModal extends Modal {
 		body.createDiv({ cls: 'tg-task-modal-hint', text: '确认后自动完成以下操作；历史日记不会修改。' });
 		const list = body.createEl('ul', { cls: 'tg-routine-migration-list' });
 		list.createEl('li', { text: `从 ${preview.templatePath} 导入 ${preview.taskCount} 个项目` });
-		list.createEl('li', { text: `创建 00-Templates/Time Grid Routines.md` });
+		list.createEl('li', { text: `创建 ${this.getDefinitionPath()}` });
 		list.createEl('li', { text: `备份模板到 ${preview.backupPath}` });
 		list.createEl('li', { text: '把模板旧区块替换为 Time Grid 生成槽位' });
 		for (const group of preview.groups) {

@@ -144,23 +144,6 @@ const html: Command = async () => {
 	process.stdout.write(`${path}\n`);
 };
 
-const debug: Command = async (args) => {
-	const vault = await locateVault();
-	const result = await scanVault({ vaultPath: vault });
-	const todayStr = new Date().toISOString().slice(0, 10);
-	const matches = result.tasks.filter((t) => t.due && t.due.includes('09-08'));
-	process.stdout.write(
-		[
-			`today: ${todayStr}`,
-			`tasks with due containing 09-08: ${matches.length}`,
-			...matches.map(
-				(t) =>
-					`  [${t.section}] [${t.status}] prio=${t.priority ?? '-'} due="${t.due ?? ''}" desc="${t.description.slice(0, 40)}"`,
-			),
-		].join('\n') + '\n',
-	);
-};
-
 const help: Command = async () => {
 	process.stdout.write(
 		[
@@ -189,7 +172,6 @@ const commands: Record<string, Command> = {
 	overdue,
 	upcoming,
 	search,
-	debug,
 	help,
 	'--help': help,
 	'-h': help,

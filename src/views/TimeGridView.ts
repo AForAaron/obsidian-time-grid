@@ -147,8 +147,19 @@ export class TimeGridView extends ItemView {
 					await this.routineIndex.rebuild();
 				},
 				openYesterday: () => this.openRoutineYesterday(),
-				openManager: () => new RoutineManagerModal(this.app, this.routineIndex, this.routineWriter).open(),
-				openMigration: () => new RoutineMigrationModal(this.app, this.routineRepository, this.routineWriter, () => void this.routineIndex.rebuild()).open(),
+				openManager: () => new RoutineManagerModal(
+					this.app,
+					this.routineIndex,
+					this.routineWriter,
+					() => this.routineRepository.getDefinitionPath()
+				).open(),
+				openMigration: () => new RoutineMigrationModal(
+					this.app,
+					this.routineRepository,
+					this.routineWriter,
+					() => void this.routineIndex.rebuild(),
+					() => this.routineRepository.getDefinitionPath()
+				).open(),
 				editFuture: (instance) => this.openFutureEditor(instance),
 				addTodayToFuture: (instance) => new RoutinePromoteModal(
 					this.app,
