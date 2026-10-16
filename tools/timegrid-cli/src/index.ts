@@ -8,7 +8,7 @@
 
 import { locateVault } from './vault.js';
 import { scanVault } from './parser.js';
-import { classify } from './classify.js';
+import { classify, sortByPriorityThenDue } from './classify.js';
 import { renderSections } from './layout.js';
 import { renderHtml } from './html.js';
 import { writeHtml } from './writer.js';
@@ -56,11 +56,14 @@ const where: Command = async () => {
 const overdue: Command = async () => {
 	const vault = await locateVault();
 	const result = await scanVault({ vaultPath: vault });
-	const overdue = result.tasks.filter(
-		(t) =>
-			t.section === 'overdue' &&
-			t.status !== 'done' &&
-			t.status !== 'cancelled',
+	const overdue = sortByPriorityThenDue(
+		result.tasks.filter(
+			(t) =>
+				t.section === 'overdue' &&
+				t.status !== 'done' &&
+				t.status !== 'cancelled',
+		),
+		'desc',
 	);
 	const out = renderSections([{ title: '已过期', tasks: overdue }], {
 		scanMs: result.scanMs,
@@ -78,15 +81,18 @@ const upcoming: Command = async (args) => {
 	}
 	const vault = await locateVault();
 	const result = await scanVault({ vaultPath: vault });
-	const future = result.tasks.filter((t) => {
-		if (t.status === 'done' || t.status === 'cancelled') return false;
-		if (t.section !== 'future') return false;
-		if (!t.due) return true;
-		const today = new Date();
-		const due = new Date(t.due);
-		const diff = (due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
-		return diff <= days;
-	});
+	const future = sortByPriorityThenDue(
+		result.tasks.filter((t) => {
+			if (t.status === 'done' || t.status === 'cancelled') return false;
+			if (t.section !== 'future') return false;
+			if (!t.due) return true;
+			const today = new Date();
+			const due = new Date(t.due);
+			const diff = (due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+			return diff <= days;
+		}),
+		'asc',
+	);
 	const out = renderSections([{ title: `未来 ${days} 天`, tasks: future }], {
 		scanMs: result.scanMs,
 		filesScanned: result.filesScanned,

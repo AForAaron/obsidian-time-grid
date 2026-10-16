@@ -113,6 +113,7 @@ tools/timegrid-cli/
 - **布局**：单列纵向堆叠（今日 / 逾期两个 section），适合 Shortcuts 的窄弹窗。宽度取 `process.stdout.columns`，小于 40 或拿不到时回退到 36。
 - **颜色**：只在 `process.stdout.isTTY` 为真时输出 ANSI；管道 / Shortcuts 里自动是纯文本。
 - **分类**：今日列取 `section === 'today'` 的全部未完成任务；逾期列只取 `section === 'overdue'` 且**带优先级**的任务（逾期太多时只看重要的）。
+- **排序**（与插件任务面板一致）：先按优先级降序；同优先级内，今日/未来按到期日**升序**（最快到期的在前），逾期按到期日**降序**（最近逾期的在前）。`tg overdue`、`tg upcoming` 同样套用这套排序。
 - **解析**：CLI 直接 import 父目录的 [`src/utils/taskParser.ts`](../../src/utils/taskParser.ts)，由 `tsconfig.json` 的 `paths` 和 `build.mjs` 的 `alias` 双重映射到 `@timegrid/task-core`。改插件的解析器，CLI 自动同步，零拷贝、零 drift。
 
 ## 已知限制
