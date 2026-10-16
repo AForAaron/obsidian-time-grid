@@ -11,6 +11,6 @@ Time Grid Design System.zip
 Time Grid Design System*/.thumbnail
 Time Grid Design System*/screenshots/
 Time Grid Design System*/uploads/
-# 项目内交接（含本机路径与项目细节，禁止提交）
-.claude/handoff*
-.claude/handoff-*/
+# 项目内交接与本地 agent 配置（含本机路径，禁止提交）
+.claude/
+PROJECT_CONTEXT.md
